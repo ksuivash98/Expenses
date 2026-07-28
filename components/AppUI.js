@@ -1210,7 +1210,7 @@ export class AppUI {
     const item = utilityService.getById(id);
     if (!item) return;
     this.openModal('Коммунальная услуга', `
-      <p class="muted">${escapeHtml(item.service)} · ${escapeHtml(item.month)}</p>
+      <p class="muted">${escapeHtml(item.service)} · ${escapeHtml(item.month_key || item.month || '')}</p>
       <label class="field">Сумма<input class="input" name="amount" type="number" min="0" step="0.01" required value="${item.amount}"></label>
       <label class="field">Срок оплаты<input class="input" name="due_date" type="date" required value="${item.due_date || todayISO()}"></label>
       <label class="field">Квитанция<input class="input" name="receipt" value="${escapeHtml(item.receipt || '')}"></label>

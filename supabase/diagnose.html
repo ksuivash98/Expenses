@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Диагностика Supabase</title>
+  <link rel="stylesheet" href="../style.css" />
+  <style>
+    .diag { max-width: 860px; margin: 40px auto; padding: 0 16px; }
+    .diag pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      font-size: 0.85rem;
+    }
+    .table-status { display: grid; gap: 6px; margin-top: 12px; }
+    .table-status div {
+      display: flex; justify-content: space-between; gap: 12px;
+      padding: 8px 12px; border-radius: 10px; background: var(--surface-soft);
+    }
+    .ok { color: var(--success); }
+    .bad { color: var(--danger); }
+    .warn { color: var(--warning); }
+  </style>
+</head>
+<body class="theme-dark">
+  <div class="app-bg" aria-hidden="true"></div>
+  <main class="diag">
+    <section class="panel glass">
+      <h1>Диагностика Supabase</h1>
+      <p class="muted">Проверка ключей, Auth API и таблиц базы данных</p>
+      <div class="btn-row" style="margin: 14px 0;">
+        <button class="btn btn-primary" id="run-diag">Проверить соединение</button>
+        <a class="btn btn-ghost" href="../auth/login.html">К входу</a>
+        <a class="btn btn-ghost" href="../app.html">В кабинет</a>
+      </div>
+      <div id="summary" class="muted">Нажмите «Проверить соединение»</div>
+      <div id="tables" class="table-status"></div>
+      <h3>Полный отчёт</h3>
+      <pre id="raw">{}</pre>
+    </section>
+  </main>
+  <script type="module">
+    import { diagnoseSupabase, APP_TABLES } from '../services/supabaseClient.js';
+    import { isSupabaseConfigured, SUPABASE_URL } from '../config.js';
+
+    const summary = document.getElementById('summary');
+    const tablesEl = document.getElementById('tables');
+    const raw = document.getElementById('raw');
+
+    async function run() {
+      summary.textContent = 'Проверка…';
+      tablesEl.innerHTML = '';
+
+      if (!isSupabaseConfigured()) {
+        summary.innerHTML = '<span class="bad">Ключи не заданы.</span> Укажите SUPABASE_URL и SUPABASE_ANON_KEY в <code>config.js</code> или создайте <code>config.local.js</code> из <code>config.example.js</code>. Затем выполните <code>supabase/schema.sql</code> в SQL Editor.';
+        raw.textContent = JSON.stringify({
+          configured: false,
+          expectedTables: APP_TABLES
+        }, null, 2);
+        return;
+      }
+
+      const report = await diagnoseSupabase();
+      summary.innerHTML = report.ready
+        ? `<span class="ok">Готово.</span> ${report.database.message}. Auth: ${report.auth.message}. URL: ${SUPABASE_URL}`
+        : `<span class="warn">Есть проблемы.</span> ${report.database.message}. Auth: ${report.auth.message}`;
+
+      tablesEl.innerHTML = (report.database.tables || []).map((t) => {
+        const cls = t.status === 'ok' ? 'ok' : (t.status === 'missing' ? 'bad' : 'warn');
+        return `<div><strong>${t.name}</strong><span class="${cls}">${t.status}${t.count != null ? ` · ${t.count}` : ''}${t.message ? ` — ${t.message}` : ''}</span></div>`;
+      }).join('');
+
+      raw.textContent = JSON.stringify(report, null, 2);
+    }
+
+    document.getElementById('run-diag').addEventListener('click', run);
+    run();
+  </script>
+</body>
+</html>

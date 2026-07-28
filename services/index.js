@@ -1,5 +1,6 @@
 /** services/ — реестр сервисов */
 export { authService } from './AuthService.js';
+export { getSupabaseClient, diagnoseSupabase, checkAuthConnection, checkDatabaseConnection } from './supabaseClient.js';
 export { databaseService } from './DatabaseService.js';
 export { storageService } from './StorageService.js';
 export { syncService } from './SyncService.js';

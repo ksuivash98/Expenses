@@ -49,7 +49,7 @@ class AuthPage {
 
   showConfigWarning() {
     if (!isSupabaseConfigured()) {
-      this.setAlert('Укажите SUPABASE_URL и SUPABASE_ANON_KEY в config.js, затем выполните supabase/schema.sql', 'warning');
+      this.setAlert('Укажите SUPABASE_URL и SUPABASE_ANON_KEY в config.js (или config.local.js). Затем выполните supabase/schema.sql и откройте supabase/diagnose.html', 'warning');
     }
   }
 

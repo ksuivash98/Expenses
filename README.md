@@ -17,7 +17,7 @@
 
 ### 2. Укажите ключи
 
-В файле `config.js`:
+В файле `config.js` или скопируйте `config.example.js` → `config.local.js`:
 
 ```js
 export const SUPABASE_URL = 'https://XXXX.supabase.co';
@@ -25,6 +25,19 @@ export const SUPABASE_ANON_KEY = 'eyJhbGciOi...';
 ```
 
 Значения: Project Settings → API → Project URL и `anon` `public` key.
+
+### 3. Примените схему БД
+
+SQL Editor → выполните **один файл** `supabase/schema.sql`  
+(полная схема: таблицы, периоды, RLS, storage, bootstrap).
+
+Файл `supabase/periods.sql` оставлен для старых проектов (миграции). Для новых достаточно `schema.sql`.
+
+### 4. Проверьте соединение
+
+Откройте http://localhost:8080/supabase/diagnose.html
+
+Должны быть зелёными Auth API и все 16 таблиц.
 
 ### 3. Запуск
 
@@ -61,8 +74,8 @@ supabase/       # schema.sql (таблицы + RLS + bootstrap)
 
 ### Настройка БД
 
-1. Выполните `supabase/schema.sql`
-2. Затем обязательно `supabase/periods.sql`
+Выполните `supabase/schema.sql` (уже включает периоды и RLS).  
+`supabase/periods.sql` — только если обновляете старую БД без периодов.
 
 ### Возможности
 

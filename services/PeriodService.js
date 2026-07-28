@@ -244,7 +244,7 @@ export class PeriodService {
             id: generateId(),
             service: util.service,
             amount: 0,
-            month: monthKey,
+            month_key: monthKey,
             status: 'pending',
             receipt: '',
             due_date: `${monthKey}-10`,

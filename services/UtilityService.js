@@ -32,11 +32,27 @@ export class UtilityService {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   }
 
+  /**
+   * Ключ месяца YYYY-MM из записи (совместимость со старым полем month).
+   * @param {object} item
+   * @returns {string}
+   */
+  getItemMonthKey(item) {
+    if (item?.month_key) return String(item.month_key);
+    if (typeof item?.month === 'string' && item.month.includes('-')) return item.month;
+    if (item?.year && item?.month) {
+      return `${item.year}-${String(item.month).padStart(2, '0')}`;
+    }
+    return this.getCurrentMonthKey();
+  }
+
   getByMonthKey(monthKey) {
-    return this.getAll().filter((item) => item.month === monthKey).map((item) => {
+    return this.getAll().filter((item) => this.getItemMonthKey(item) === monthKey).map((item) => {
       const meta = UTILITY_SERVICES.find((s) => s.name === item.service);
       return {
         ...item,
+        month: this.getItemMonthKey(item),
+        month_key: this.getItemMonthKey(item),
         typeName: item.service,
         typeIcon: meta?.icon || '🏠',
         typeColor: meta?.color || '#5B8DEF'
@@ -58,7 +74,7 @@ export class UtilityService {
           id: generateId(),
           service: service.name,
           amount: 0,
-          month: monthKey,
+          month_key: monthKey,
           status: 'pending',
           receipt: '',
           due_date: dueDate,
@@ -131,9 +147,9 @@ export class UtilityService {
 
   getStats(year = new Date().getFullYear()) {
     const all = this.getAll().filter((i) => Number(i.amount) > 0);
-    const yearItems = all.filter((i) => String(i.month).startsWith(String(year)));
+    const yearItems = all.filter((i) => this.getItemMonthKey(i).startsWith(String(year)));
     const monthKey = this.getCurrentMonthKey();
-    const monthItems = all.filter((i) => i.month === monthKey);
+    const monthItems = all.filter((i) => this.getItemMonthKey(i) === monthKey);
     const paidYear = yearItems.filter((i) => i.status === 'paid');
     const paidMonth = monthItems.filter((i) => i.status === 'paid');
     const yearAmounts = paidYear.map((i) => Number(i.amount));
@@ -174,7 +190,7 @@ export class UtilityService {
       .slice(0, limit)
       .map((item) => ({
         id: item.id, type: 'utility', title: item.service || item.typeName,
-        subtitle: item.month, amount: Number(item.amount) || 0,
+        subtitle: this.getItemMonthKey(item), amount: Number(item.amount) || 0,
         date: item.due_date, icon: item.typeIcon || '🏠'
       }));
   }
