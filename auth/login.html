@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Вход — Личный финансовый кабинет</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../style.css" />
+  <link rel="stylesheet" href="auth.css" />
+  <link rel="icon" href="../assets/icons/favicon.svg" type="image/svg+xml" />
+</head>
+<body class="auth-body theme-dark">
+  <div class="app-bg" aria-hidden="true"></div>
+
+  <main class="auth-wrap">
+    <section class="auth-card glass">
+      <div class="auth-brand">
+        <img src="../assets/icons/logo.svg" width="44" height="44" alt="" />
+        <div>
+          <strong>Финансы</strong>
+          <span>Мультипользовательский кабинет</span>
+        </div>
+      </div>
+
+      <h1 id="auth-title">Вход</h1>
+      <p class="muted" id="auth-subtitle">Личный финансовый кабинет</p>
+
+      <div id="auth-alert" class="auth-alert"></div>
+
+      <div class="auth-tabs">
+        <button type="button" class="active" data-mode="login">Войти</button>
+        <button type="button" data-mode="register">Создать аккаунт</button>
+        <button type="button" data-mode="forgot">Забыли пароль</button>
+      </div>
+
+      <form id="form-login" class="auth-form">
+        <label class="field">Email
+          <input class="input" type="email" name="email" required placeholder="you@email.com" autocomplete="email" />
+        </label>
+        <label class="field">Пароль
+          <input class="input" type="password" name="password" required minlength="6" placeholder="••••••••" autocomplete="current-password" />
+        </label>
+        <button class="btn btn-primary btn-block" type="submit">Войти</button>
+      </form>
+
+      <form id="form-register" class="auth-form hidden">
+        <label class="field">Имя
+          <input class="input" type="text" name="name" required placeholder="Как к вам обращаться" autocomplete="name" />
+        </label>
+        <label class="field">Email
+          <input class="input" type="email" name="email" required placeholder="you@email.com" autocomplete="email" />
+        </label>
+        <label class="field">Пароль
+          <input class="input" type="password" name="password" required minlength="6" autocomplete="new-password" />
+        </label>
+        <label class="field">Повтор пароля
+          <input class="input" type="password" name="password2" required minlength="6" autocomplete="new-password" />
+        </label>
+        <button class="btn btn-primary btn-block" type="submit">Создать аккаунт</button>
+      </form>
+
+      <form id="form-forgot" class="auth-form hidden">
+        <label class="field">Email
+          <input class="input" type="email" name="email" required placeholder="you@email.com" />
+        </label>
+        <button class="btn btn-primary btn-block" type="submit">Отправить письмо</button>
+      </form>
+    </section>
+  </main>
+
+  <script type="module" src="auth-page.js"></script>
+</body>
+</html>

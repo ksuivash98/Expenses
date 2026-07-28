@@ -1,16 +1,17 @@
-/**
+﻿/**
  * charts.js
- * Диаграммы на Canvas API: круговые, кольцевые, столбчатые, линейные.
+ * Р”РёР°РіСЂР°РјРјС‹ РЅР° Canvas API: РєСЂСѓРіРѕРІС‹Рµ, РєРѕР»СЊС†РµРІС‹Рµ, СЃС‚РѕР»Р±С‡Р°С‚С‹Рµ, Р»РёРЅРµР№РЅС‹Рµ.
  */
 
-import { colorByIndex, formatMoney, hexToRgba, DEFAULT_COLORS } from './utils.js';
+import { colorByIndex, hexToRgba, DEFAULT_COLORS } from '../helpers/utils.js';
+import { formatMoney } from '../helpers/format.js';
 
 /**
- * Утилиты и отрисовка графиков.
+ * РЈС‚РёР»РёС‚С‹ Рё РѕС‚СЂРёСЃРѕРІРєР° РіСЂР°С„РёРєРѕРІ.
  */
 export class ChartsService {
   /**
-   * Подгоняет размер canvas под CSS-размер и devicePixelRatio.
+   * РџРѕРґРіРѕРЅСЏРµС‚ СЂР°Р·РјРµСЂ canvas РїРѕРґ CSS-СЂР°Р·РјРµСЂ Рё devicePixelRatio.
    * @param {HTMLCanvasElement} canvas
    * @returns {{ ctx: CanvasRenderingContext2D, width: number, height: number }}
    */
@@ -30,14 +31,14 @@ export class ChartsService {
   }
 
   /**
-   * Нормализует набор данных для диаграмм.
+   * РќРѕСЂРјР°Р»РёР·СѓРµС‚ РЅР°Р±РѕСЂ РґР°РЅРЅС‹С… РґР»СЏ РґРёР°РіСЂР°РјРј.
    * @param {Array<{ label: string, value: number, color?: string }>} items
    * @returns {Array<object>}
    */
   normalizeData(items = []) {
     return items
       .map((item, index) => ({
-        label: item.label || `Элемент ${index + 1}`,
+        label: item.label || `Р­Р»РµРјРµРЅС‚ ${index + 1}`,
         value: Math.max(0, Number(item.value) || 0),
         color: item.color || colorByIndex(index)
       }))
@@ -45,7 +46,7 @@ export class ChartsService {
   }
 
   /**
-   * Рисует кольцевую (donut) диаграмму.
+   * Р РёСЃСѓРµС‚ РєРѕР»СЊС†РµРІСѓСЋ (donut) РґРёР°РіСЂР°РјРјСѓ.
    * @param {HTMLCanvasElement} canvas
    * @param {Array<object>} items
    * @param {object} [options]
@@ -55,13 +56,13 @@ export class ChartsService {
     const { ctx, width, height } = this.prepareCanvas(canvas);
     const {
       currency = 'RUB',
-      centerLabel = 'Итого',
+      centerLabel = 'РС‚РѕРіРѕ',
       animate = true,
       thickness = 0.42
     } = options;
 
     if (!data.length) {
-      this.drawEmpty(ctx, width, height, 'Нет данных');
+      this.drawEmpty(ctx, width, height, 'РќРµС‚ РґР°РЅРЅС‹С…');
       return;
     }
 
@@ -122,7 +123,7 @@ export class ChartsService {
   }
 
   /**
-   * Рисует круговую диаграмму (pie).
+   * Р РёСЃСѓРµС‚ РєСЂСѓРіРѕРІСѓСЋ РґРёР°РіСЂР°РјРјСѓ (pie).
    * @param {HTMLCanvasElement} canvas
    * @param {Array<object>} items
    * @param {object} [options]
@@ -133,7 +134,7 @@ export class ChartsService {
     const { animate = true } = options;
 
     if (!data.length) {
-      this.drawEmpty(ctx, width, height, 'Нет данных');
+      this.drawEmpty(ctx, width, height, 'РќРµС‚ РґР°РЅРЅС‹С…');
       return;
     }
 
@@ -173,7 +174,7 @@ export class ChartsService {
   }
 
   /**
-   * Рисует столбчатую диаграмму.
+   * Р РёСЃСѓРµС‚ СЃС‚РѕР»Р±С‡Р°С‚СѓСЋ РґРёР°РіСЂР°РјРјСѓ.
    * @param {HTMLCanvasElement} canvas
    * @param {Array<object>} items
    * @param {object} [options]
@@ -188,7 +189,7 @@ export class ChartsService {
     } = options;
 
     if (!data.length) {
-      this.drawEmpty(ctx, width, height, 'Нет данных');
+      this.drawEmpty(ctx, width, height, 'РќРµС‚ РґР°РЅРЅС‹С…');
       return;
     }
 
@@ -231,7 +232,7 @@ export class ChartsService {
           .trim() || 'rgba(255,255,255,0.65)';
         ctx.font = '11px Manrope, sans-serif';
         ctx.textAlign = 'center';
-        const label = item.label.length > 8 ? `${item.label.slice(0, 7)}…` : item.label;
+        const label = item.label.length > 8 ? `${item.label.slice(0, 7)}вЂ¦` : item.label;
         ctx.fillText(label, x + barWidth / 2, height - 14);
 
         if (progress > 0.85) {
@@ -259,7 +260,7 @@ export class ChartsService {
   }
 
   /**
-   * Рисует сгруппированные столбцы (доход/расход по месяцам).
+   * Р РёСЃСѓРµС‚ СЃРіСЂСѓРїРїРёСЂРѕРІР°РЅРЅС‹Рµ СЃС‚РѕР»Р±С†С‹ (РґРѕС…РѕРґ/СЂР°СЃС…РѕРґ РїРѕ РјРµСЃСЏС†Р°Рј).
    * @param {HTMLCanvasElement} canvas
    * @param {Array<{ label: string, income: number, expense: number }>} items
    * @param {object} [options]
@@ -270,7 +271,7 @@ export class ChartsService {
 
     const data = items.filter((item) => (item.income || 0) > 0 || (item.expense || 0) > 0);
     if (!data.length) {
-      this.drawEmpty(ctx, width, height, 'Нет данных за период');
+      this.drawEmpty(ctx, width, height, 'РќРµС‚ РґР°РЅРЅС‹С… Р·Р° РїРµСЂРёРѕРґ');
       return;
     }
 
@@ -324,14 +325,14 @@ export class ChartsService {
       ctx.fillStyle = getComputedStyle(document.documentElement)
         .getPropertyValue('--text-primary')
         .trim() || '#fff';
-      ctx.fillText(`Доход (${currency})`, padding.left + 16, 17);
+      ctx.fillText(`Р”РѕС…РѕРґ (${currency})`, padding.left + 16, 17);
 
       ctx.fillStyle = expenseColor;
       ctx.fillRect(padding.left + 110, 8, 10, 10);
       ctx.fillStyle = getComputedStyle(document.documentElement)
         .getPropertyValue('--text-primary')
         .trim() || '#fff';
-      ctx.fillText('Расход', padding.left + 126, 17);
+      ctx.fillText('Р Р°СЃС…РѕРґ', padding.left + 126, 17);
     };
 
     if (!animate) {
@@ -349,7 +350,7 @@ export class ChartsService {
   }
 
   /**
-   * Рисует линейный график.
+   * Р РёСЃСѓРµС‚ Р»РёРЅРµР№РЅС‹Р№ РіСЂР°С„РёРє.
    * @param {HTMLCanvasElement} canvas
    * @param {Array<{ label: string, value: number }>} items
    * @param {object} [options]
@@ -363,7 +364,7 @@ export class ChartsService {
 
     const { ctx, width, height } = this.prepareCanvas(canvas);
     if (!data.length) {
-      this.drawEmpty(ctx, width, height, 'Нет данных');
+      this.drawEmpty(ctx, width, height, 'РќРµС‚ РґР°РЅРЅС‹С…');
       return;
     }
 
@@ -438,9 +439,9 @@ export class ChartsService {
   }
 
   /**
-   * Рисует горизонтальный прогресс-бар на canvas.
+   * Р РёСЃСѓРµС‚ РіРѕСЂРёР·РѕРЅС‚Р°Р»СЊРЅС‹Р№ РїСЂРѕРіСЂРµСЃСЃ-Р±Р°СЂ РЅР° canvas.
    * @param {HTMLCanvasElement} canvas
-   * @param {number} progress 0–100
+   * @param {number} progress 0вЂ“100
    * @param {object} [options]
    */
   drawProgress(canvas, progress, options = {}) {
@@ -464,7 +465,7 @@ export class ChartsService {
   }
 
   /**
-   * Сообщение при отсутствии данных.
+   * РЎРѕРѕР±С‰РµРЅРёРµ РїСЂРё РѕС‚СЃСѓС‚СЃС‚РІРёРё РґР°РЅРЅС‹С….
    * @param {CanvasRenderingContext2D} ctx
    * @param {number} width
    * @param {number} height
@@ -482,7 +483,7 @@ export class ChartsService {
   }
 
   /**
-   * Скруглённый прямоугольник.
+   * РЎРєСЂСѓРіР»С‘РЅРЅС‹Р№ РїСЂСЏРјРѕСѓРіРѕР»СЊРЅРёРє.
    * @param {CanvasRenderingContext2D} ctx
    * @param {number} x
    * @param {number} y
@@ -502,14 +503,14 @@ export class ChartsService {
   }
 
   /**
-   * HTML-легенда для диаграммы.
+   * HTML-Р»РµРіРµРЅРґР° РґР»СЏ РґРёР°РіСЂР°РјРјС‹.
    * @param {Array<object>} items
    * @param {string} [currency='RUB']
    * @returns {string}
    */
   buildLegendHtml(items, currency = 'RUB') {
     const data = this.normalizeData(items);
-    if (!data.length) return '<div class="chart-legend empty">Нет данных</div>';
+    if (!data.length) return '<div class="chart-legend empty">РќРµС‚ РґР°РЅРЅС‹С…</div>';
 
     const total = data.reduce((sum, item) => sum + item.value, 0);
 
@@ -531,7 +532,8 @@ export class ChartsService {
   }
 }
 
-/** Единственный экземпляр сервиса диаграмм. */
+/** Р•РґРёРЅСЃС‚РІРµРЅРЅС‹Р№ СЌРєР·РµРјРїР»СЏСЂ СЃРµСЂРІРёСЃР° РґРёР°РіСЂР°РјРј. */
 export const chartsService = new ChartsService();
 
 export default chartsService;
+
