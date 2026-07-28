@@ -1,4 +1,0 @@
-# Локальные секреты — не коммитить
-config.local.js
-.env
-.env.local
