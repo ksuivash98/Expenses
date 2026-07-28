@@ -111,6 +111,7 @@ p {
   position: fixed;
   inset: 0;
   z-index: -1;
+  pointer-events: none;
   background:
     radial-gradient(ellipse 80% 50% at 10% -10%, rgba(61, 139, 253, 0.35), transparent 55%),
     radial-gradient(ellipse 60% 40% at 90% 10%, rgba(45, 212, 191, 0.18), transparent 50%),
@@ -1147,6 +1148,11 @@ textarea.input {
   place-items: center;
   padding: 18px;
   animation: fadeUp 0.25s ease;
+}
+
+.modal-backdrop[hidden] {
+  display: none !important;
+  pointer-events: none;
 }
 
 .modal {

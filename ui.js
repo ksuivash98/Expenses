@@ -27,6 +27,8 @@ export class UI {
     this.page = 'dashboard';
     this.handlers = {};
     this.modalResolve = null;
+    this.lastModalFormData = {};
+    this._contentBound = false;
   }
 
   on(event, handler) {
@@ -177,6 +179,7 @@ export class UI {
   modal({ title, body, actions = [], wide = false }) {
     return new Promise((resolve) => {
       this.modalResolve = resolve;
+      this.lastModalFormData = {};
       this.modalRoot.hidden = false;
       this.modalRoot.innerHTML = `
         <div class="modal glass ${wide ? 'wide' : ''}" role="dialog">
@@ -193,7 +196,10 @@ export class UI {
         </div>
       `;
       this.modalRoot.onclick = (e) => {
-        if (e.target === this.modalRoot) this.closeModal(null);
+        if (e.target === this.modalRoot) {
+          this.closeModal(null);
+          return;
+        }
         const btn = e.target.closest('[data-action]');
         if (btn) this.closeModal(btn.dataset.action);
       };
@@ -201,17 +207,21 @@ export class UI {
   }
 
   closeModal(result) {
+    // Сохраняем данные формы до очистки DOM
+    const form = this.modalRoot.querySelector('form');
+    this.lastModalFormData = form
+      ? Object.fromEntries(new FormData(form).entries())
+      : {};
     this.modalRoot.hidden = true;
     this.modalRoot.innerHTML = '';
+    this.modalRoot.onclick = null;
     const resolve = this.modalResolve;
     this.modalResolve = null;
     if (resolve) resolve(result);
   }
 
   getModalFormData() {
-    const form = this.modalRoot.querySelector('form');
-    if (!form) return {};
-    return Object.fromEntries(new FormData(form).entries());
+    return { ...(this.lastModalFormData || {}) };
   }
 
   render(html) {
@@ -219,16 +229,20 @@ export class UI {
     this.contentEl.classList.remove('fade-in');
     void this.contentEl.offsetWidth;
     this.contentEl.classList.add('fade-in');
-    this.contentEl.onclick = (e) => {
-      const actionEl = e.target.closest('[data-action]');
-      if (!actionEl) return;
-      this.emit('action', {
-        action: actionEl.dataset.action,
-        id: actionEl.dataset.id,
-        el: actionEl,
-        event: e
+    if (!this._contentBound) {
+      this._contentBound = true;
+      this.contentEl.addEventListener('click', (e) => {
+        const actionEl = e.target.closest('[data-action]');
+        if (!actionEl || !this.contentEl.contains(actionEl)) return;
+        e.preventDefault();
+        this.emit('action', {
+          action: actionEl.dataset.action,
+          id: actionEl.dataset.id,
+          el: actionEl,
+          event: e
+        });
       });
-    };
+    }
   }
 
   money(amount, currency = 'RUB') {
