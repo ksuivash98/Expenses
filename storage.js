@@ -59,6 +59,8 @@ function createDefaultState() {
       currency: 'RUB',
       animations: true,
       locale: 'ru-RU',
+      creditsSortBy: 'payment_date',
+      creditsSortDir: 'asc',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     },

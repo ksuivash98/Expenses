@@ -9,10 +9,24 @@ import {
 } from './utils.js';
 
 const STATUS_LABELS = {
-  active: 'Активный',
+  active: 'Активен',
   closed: 'Закрыт',
   paid: 'Закрыт'
 };
+
+export const CREDIT_SORT_OPTIONS = [
+  { value: 'payment_date', label: 'Дата платежа' },
+  { value: 'balance', label: 'Остаток долга' },
+  { value: 'monthly_payment', label: 'Ежемесячный платёж' },
+  { value: 'interest_rate', label: 'Процентная ставка' },
+  { value: 'title', label: 'Название кредита' },
+  { value: 'bank', label: 'Банк' },
+  { value: 'end_date', label: 'Дата окончания' },
+  { value: 'months_left', label: 'Осталось месяцев' },
+  { value: 'initial_amount', label: 'Начальная сумма' }
+];
+
+const DEFAULT_SORT = { sortBy: 'payment_date', sortDir: 'asc' };
 
 function safeNum(value) {
   const n = Number(value);
@@ -185,8 +199,94 @@ export class CreditsService {
     return this.getEnrichedAll().filter((c) => c.status === 'active');
   }
 
-  getSummary() {
-    const items = this.getEnrichedAll();
+  /**
+   * Значение для сравнения при сортировке.
+   */
+  _sortValue(item, sortBy) {
+    switch (sortBy) {
+      case 'payment_date':
+        return item.nextPayment || (item.status === 'active'
+          ? nextPaymentDate(item.payment_day)
+          : null);
+      case 'balance':
+        return safeNum(item.current_balance);
+      case 'monthly_payment':
+        return safeNum(item.monthly_payment);
+      case 'interest_rate':
+        return safeNum(item.interest_rate);
+      case 'title':
+        return String(item.title || '').toLocaleLowerCase('ru');
+      case 'bank':
+        return String(item.bank || '').toLocaleLowerCase('ru');
+      case 'end_date':
+        return item.end_date || item.estimatedCloseDate || null;
+      case 'months_left':
+        return item.monthsLeft;
+      case 'initial_amount':
+        return safeNum(item.initial_amount);
+      default:
+        return item.nextPayment || null;
+    }
+  }
+
+  /**
+   * Сортировка: закрытые всегда внизу, внутри групп — по выбранному полю.
+   */
+  sortItems(items, sortBy = DEFAULT_SORT.sortBy, sortDir = DEFAULT_SORT.sortDir) {
+    const dir = sortDir === 'desc' ? -1 : 1;
+    const key = CREDIT_SORT_OPTIONS.some((o) => o.value === sortBy)
+      ? sortBy
+      : DEFAULT_SORT.sortBy;
+
+    return [...(items || [])].sort((a, b) => {
+      const aClosed = a.status === 'active' ? 0 : 1;
+      const bClosed = b.status === 'active' ? 0 : 1;
+      if (aClosed !== bClosed) return aClosed - bClosed;
+
+      const av = this._sortValue(a, key);
+      const bv = this._sortValue(b, key);
+
+      const aEmpty = av == null || av === '';
+      const bEmpty = bv == null || bv === '';
+      if (aEmpty && bEmpty) return 0;
+      if (aEmpty) return 1;
+      if (bEmpty) return -1;
+
+      if (typeof av === 'string' || typeof bv === 'string') {
+        return String(av).localeCompare(String(bv), 'ru', { numeric: true }) * dir;
+      }
+      return (safeNum(av) - safeNum(bv)) * dir;
+    });
+  }
+
+  getSortPreferences() {
+    const settings = storage.getSettings() || {};
+    const sortBy = CREDIT_SORT_OPTIONS.some((o) => o.value === settings.creditsSortBy)
+      ? settings.creditsSortBy
+      : DEFAULT_SORT.sortBy;
+    const sortDir = settings.creditsSortDir === 'desc' ? 'desc' : 'asc';
+    return { sortBy, sortDir };
+  }
+
+  setSortPreferences(sortBy, sortDir) {
+    const nextBy = CREDIT_SORT_OPTIONS.some((o) => o.value === sortBy)
+      ? sortBy
+      : DEFAULT_SORT.sortBy;
+    const nextDir = sortDir === 'desc' ? 'desc' : 'asc';
+    storage.updateSettings({
+      creditsSortBy: nextBy,
+      creditsSortDir: nextDir
+    });
+    return { sortBy: nextBy, sortDir: nextDir };
+  }
+
+  getSummary(sortOverride = null) {
+    const prefs = sortOverride || this.getSortPreferences();
+    const items = this.sortItems(
+      this.getEnrichedAll(),
+      prefs.sortBy,
+      prefs.sortDir
+    );
     const active = items.filter((c) => c.status === 'active');
     const totalDebt = roundMoney(sumBy(active, (c) => c.current_balance));
     const monthly = roundMoney(sumBy(active, (c) => c.monthly_payment));
@@ -215,6 +315,9 @@ export class CreditsService {
       nearestPayment: nearest ? nearest.nextPayment : null,
       nearestTitle: nearest ? `${nearest.bank} · ${nearest.title}` : null,
       nearestAmount: nearest ? nearest.monthly_payment : 0,
+      sortBy: prefs.sortBy,
+      sortDir: prefs.sortDir,
+      sortOptions: CREDIT_SORT_OPTIONS,
       items,
       active
     };

@@ -181,6 +181,10 @@ export class UI {
         this.emit('switch-period', e.target.value);
         return;
       }
+      if (e.target?.id === 'credits-sort-by') {
+        this.emit('credits-sort-by', e.target.value);
+        return;
+      }
       if (e.target?.id === 'setting-theme') {
         this.emit('settings-theme', e.target.value);
         return;
@@ -495,11 +499,27 @@ export class UI {
     const fmt = (v) => formatMoney(Number.isFinite(Number(v)) ? Number(v) : 0, currency);
     const dash = (v) => (v == null || v === '' ? '—' : v);
     const monthsLabel = (m) => (m == null ? '—' : `${m} мес.`);
+    const sortBy = summary.sortBy || 'payment_date';
+    const sortDir = summary.sortDir === 'desc' ? 'desc' : 'asc';
+    const sortOptions = summary.sortOptions || [];
 
     this.render(`
       ${this.toolbar('Кредиты', 'Аналитика по всем кредитам', [
         '<button class="btn btn-primary" data-action="add-credit" type="button">+ Кредит</button>'
       ])}
+      <div class="filters credits-sort-bar glass-soft">
+        <label>Сортировать по
+          <select id="credits-sort-by" class="input">
+            ${sortOptions.map((o) => `
+              <option value="${escapeHtml(o.value)}" ${o.value === sortBy ? 'selected' : ''}>${escapeHtml(o.label)}</option>
+            `).join('')}
+          </select>
+        </label>
+        <div class="btn-row wrap">
+          <button class="btn btn-sm ${sortDir === 'asc' ? 'btn-primary' : 'btn-ghost'}" data-action="credits-sort-dir" data-dir="asc" type="button">↑ По возрастанию</button>
+          <button class="btn btn-sm ${sortDir === 'desc' ? 'btn-primary' : 'btn-ghost'}" data-action="credits-sort-dir" data-dir="desc" type="button">↓ По убыванию</button>
+        </div>
+      </div>
       ${this.stats([
         { icon: '🏦', label: 'Кредитов (активных)', value: String(summary.count || 0), tone: 'blue' },
         { icon: '💳', label: 'Общий остаток', value: fmt(summary.totalDebt), tone: 'red' },
@@ -565,37 +585,28 @@ export class UI {
           <table class="credits-table">
             <thead>
               <tr>
+                <th>Название</th>
                 <th>Банк</th>
-                <th>Кредит</th>
-                <th>Первоначальная</th>
-                <th>Остаток</th>
-                <th>Выплачено</th>
-                <th>Платёж</th>
-                <th>Ставка</th>
-                <th>Осталось мес.</th>
-                <th>Следующий платёж</th>
-                <th>Прогресс</th>
+                <th>Остаток долга</th>
+                <th>Ежемесячный платёж</th>
+                <th>Процентная ставка</th>
+                <th>День платежа</th>
+                <th>Осталось месяцев</th>
+                <th>Дата окончания</th>
                 <th>Статус</th>
               </tr>
             </thead>
             <tbody>
               ${items.map((item) => `
                 <tr>
-                  <td>${escapeHtml(item.bank)}</td>
                   <td>${escapeHtml(item.title)}</td>
-                  <td>${fmt(item.initial_amount)}</td>
+                  <td>${escapeHtml(item.bank)}</td>
                   <td>${fmt(item.current_balance)}</td>
-                  <td>${fmt(item.paid)}</td>
                   <td>${fmt(item.monthly_payment)}</td>
                   <td>${item.interest_rate}%</td>
+                  <td>${item.payment_day}-е</td>
                   <td>${dash(item.monthsLeft)}</td>
-                  <td>${item.nextPayment ? formatDate(item.nextPayment) : '—'}</td>
-                  <td>
-                    <div class="progress-bar progress-tone-${item.progressTone}" style="min-width:90px">
-                      <i style="width:${item.progress}%"></i>
-                    </div>
-                    <span class="muted">${item.progress}%</span>
-                  </td>
+                  <td>${item.end_date ? formatDate(item.end_date) : (item.estimatedCloseDate ? formatDate(item.estimatedCloseDate) : '—')}</td>
                   <td>${escapeHtml(item.statusLabel)}</td>
                 </tr>
               `).join('')}

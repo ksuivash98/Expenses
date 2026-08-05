@@ -796,6 +796,20 @@ p {
   margin-bottom: 16px;
 }
 
+.credits-sort-bar {
+  grid-template-columns: minmax(180px, 1fr) auto;
+  align-items: end;
+  margin-bottom: 16px;
+}
+
+.credits-sort-bar label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
 .input {
   width: 100%;
   padding: 11px 13px;

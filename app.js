@@ -61,6 +61,11 @@ class App {
       notificationService.markRead(id);
       this.ui.updateNotificationBadge(notificationService.getUnreadCount());
     });
+    this.ui.on('credits-sort-by', (sortBy) => {
+      const prefs = creditsService.getSortPreferences();
+      creditsService.setSortPreferences(sortBy, prefs.sortDir);
+      this.refresh();
+    });
     this.ui.on('settings-theme', (theme) => {
       settingsService.setTheme(theme);
       this.ui.toast('Тема обновлена', 'success');
@@ -158,7 +163,8 @@ class App {
     }
   }
 
-  async handleAction({ action, id }) {
+  async handleAction(payload) {
+    const { action, id, el } = payload || {};
     try {
       switch (action) {
         case 'add-income': return this.formIncome();
@@ -176,6 +182,13 @@ class App {
         case 'pay-credit': return this.payCredit(id);
         case 'early-pay-credit': return this.earlyPayCredit(id);
         case 'delete-credit': return this.deleteCredit(id);
+        case 'credits-sort-dir': {
+          const dir = el?.dataset?.dir === 'desc' ? 'desc' : 'asc';
+          const prefs = creditsService.getSortPreferences();
+          creditsService.setSortPreferences(prefs.sortBy, dir);
+          this.refresh();
+          break;
+        }
         case 'add-utility': return this.formUtility();
         case 'pay-utility': return this.payUtility(id);
         case 'delete-utility': return this.deleteUtility(id);
