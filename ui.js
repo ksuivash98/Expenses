@@ -28,7 +28,7 @@ export class UI {
     this.handlers = {};
     this.modalResolve = null;
     this.lastModalFormData = {};
-    this._contentBound = false;
+    this._delegated = false;
   }
 
   on(event, handler) {
@@ -38,6 +38,10 @@ export class UI {
   emit(event, payload) {
     const fn = this.handlers[event];
     return fn ? fn(payload) : undefined;
+  }
+
+  isModalOpen() {
+    return Boolean(this.modalRoot?.classList.contains('is-open'));
   }
 
   mount() {
@@ -94,22 +98,97 @@ export class UI {
       </button>
     `).join('');
 
-    this.navEl.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-page]');
-      if (!btn) return;
-      this.emit('navigate', btn.dataset.page);
+    this.bindGlobalEvents();
+  }
+
+  bindGlobalEvents() {
+    if (this._delegated) return;
+    this._delegated = true;
+
+    this.root.addEventListener('click', (e) => {
+      const menuToggle = e.target.closest('#menu-toggle');
+      if (menuToggle) {
+        this.root.querySelector('#sidebar')?.classList.toggle('open');
+        this.root.querySelector('#sidebar-overlay')?.classList.toggle('visible');
+        return;
+      }
+
+      const overlay = e.target.closest('#sidebar-overlay');
+      if (overlay) {
+        this.root.querySelector('#sidebar')?.classList.remove('open');
+        overlay.classList.remove('visible');
+        return;
+      }
+
+      if (e.target.closest('#btn-notifications')) {
+        this.emit('notifications');
+        return;
+      }
+
+      if (e.target.closest('#btn-close-month')) {
+        this.emit('close-month');
+        return;
+      }
+
+      if (e.target.closest('#btn-open-period')) {
+        this.emit('open-period');
+        return;
+      }
+
+      const pageBtn = e.target.closest('[data-page]');
+      if (pageBtn && this.navEl?.contains(pageBtn)) {
+        this.emit('navigate', pageBtn.dataset.page);
+        return;
+      }
+
+      // Модалка: кнопки действий и фон
+      if (this.isModalOpen() && this.modalRoot.contains(e.target)) {
+        if (e.target === this.modalRoot) {
+          this.closeModal(null);
+          return;
+        }
+        const notifBtn = e.target.closest('[data-notif]');
+        if (notifBtn) {
+          e.preventDefault();
+          this.emit('notif-read', notifBtn.dataset.notif);
+          notifBtn.closest('.list-item')?.classList.remove('unread');
+          return;
+        }
+        const modalBtn = e.target.closest('[data-action]');
+        if (modalBtn) {
+          e.preventDefault();
+          this.closeModal(modalBtn.dataset.action);
+          return;
+        }
+        return;
+      }
+
+      // Кнопки контента
+      const actionEl = e.target.closest('[data-action]');
+      if (actionEl && this.contentEl?.contains(actionEl)) {
+        e.preventDefault();
+        this.emit('action', {
+          action: actionEl.dataset.action,
+          id: actionEl.dataset.id,
+          el: actionEl,
+          event: e
+        });
+      }
     });
 
-    this.root.querySelector('#menu-toggle').addEventListener('click', () => {
-      this.root.querySelector('#sidebar').classList.toggle('open');
-      this.root.querySelector('#sidebar-overlay').classList.toggle('visible');
+    this.root.addEventListener('change', (e) => {
+      if (e.target?.id === 'period-select') {
+        this.emit('switch-period', e.target.value);
+        return;
+      }
+      if (e.target?.id === 'setting-theme') {
+        this.emit('settings-theme', e.target.value);
+        return;
+      }
+      if (e.target?.id === 'setting-currency') {
+        this.emit('settings-currency', e.target.value);
+      }
     });
-    this.root.querySelector('#sidebar-overlay').addEventListener('click', () => {
-      this.root.querySelector('#sidebar').classList.remove('open');
-      this.root.querySelector('#sidebar-overlay').classList.remove('visible');
-    });
-    this.root.querySelector('#btn-notifications').addEventListener('click', () => this.emit('notifications'));
-    this.root.querySelector('#btn-close-month').addEventListener('click', () => this.emit('close-month'));
   }
 
   setActivePage(page) {
@@ -124,8 +203,10 @@ export class UI {
   }
 
   updateSidebarStats({ freeMoney, savings, currency }) {
-    this.root.querySelector('#side-free').textContent = formatMoney(freeMoney, currency);
-    this.root.querySelector('#side-savings').textContent = formatMoney(savings, currency);
+    const freeEl = this.root.querySelector('#side-free');
+    const saveEl = this.root.querySelector('#side-savings');
+    if (freeEl) freeEl.textContent = formatMoney(freeMoney, currency);
+    if (saveEl) saveEl.textContent = formatMoney(savings, currency);
   }
 
   updateNotificationBadge(count) {
@@ -140,21 +221,19 @@ export class UI {
   }
 
   renderPeriodSwitcher(periods, currentId) {
+    if (!this.periodEl) return;
     const options = periods.map((p) => {
       const label = `${PERIOD_STATUS_LABELS[p.status] || p.status}: ${p.title || ''}`;
       return `<option value="${p.id}" ${p.id === currentId ? 'selected' : ''}>${escapeHtml(label)}</option>`;
     }).join('');
     this.periodEl.innerHTML = `
-      <select id="period-select" class="period-select">${options}</select>
+      <select id="period-select" class="period-select" aria-label="Период">${options}</select>
       <button class="btn btn-ghost btn-sm" id="btn-open-period" type="button">Открыть период</button>
     `;
-    this.periodEl.querySelector('#period-select').addEventListener('change', (e) => {
-      this.emit('switch-period', e.target.value);
-    });
-    this.periodEl.querySelector('#btn-open-period').addEventListener('click', () => this.emit('open-period'));
   }
 
   toast(message, type = 'info') {
+    if (!this.toastRoot) return;
     const el = document.createElement('div');
     el.className = `toast toast-${type} show`;
     el.textContent = message;
@@ -166,23 +245,30 @@ export class UI {
   }
 
   async confirm(message, { danger = false, title = 'Подтверждение' } = {}) {
-    return this.modal({
+    const id = await this.modal({
       title,
       body: `<p>${escapeHtml(message)}</p>`,
       actions: [
         { id: 'cancel', label: 'Отмена', className: 'btn-ghost' },
         { id: 'ok', label: 'Подтвердить', className: danger ? 'btn-danger' : 'btn-primary' }
       ]
-    }).then((id) => id === 'ok');
+    });
+    return id === 'ok';
   }
 
   modal({ title, body, actions = [], wide = false }) {
     return new Promise((resolve) => {
+      // Если уже открыта другая модалка — закрываем её
+      if (this.modalResolve) {
+        const prev = this.modalResolve;
+        this.modalResolve = null;
+        prev(null);
+      }
+
       this.modalResolve = resolve;
       this.lastModalFormData = {};
-      this.modalRoot.hidden = false;
       this.modalRoot.innerHTML = `
-        <div class="modal glass ${wide ? 'wide' : ''}" role="dialog">
+        <div class="modal glass ${wide ? 'wide' : ''}" role="dialog" aria-modal="true">
           <div class="modal-head">
             <h3>${escapeHtml(title)}</h3>
             <button class="icon-btn" data-action="cancel" type="button" aria-label="Закрыть">✕</button>
@@ -195,26 +281,20 @@ export class UI {
           </div>
         </div>
       `;
-      this.modalRoot.onclick = (e) => {
-        if (e.target === this.modalRoot) {
-          this.closeModal(null);
-          return;
-        }
-        const btn = e.target.closest('[data-action]');
-        if (btn) this.closeModal(btn.dataset.action);
-      };
+      this.modalRoot.hidden = false;
+      this.modalRoot.classList.add('is-open');
     });
   }
 
   closeModal(result) {
-    // Сохраняем данные формы до очистки DOM
+    if (!this.modalRoot) return;
     const form = this.modalRoot.querySelector('form');
     this.lastModalFormData = form
       ? Object.fromEntries(new FormData(form).entries())
       : {};
+    this.modalRoot.classList.remove('is-open');
     this.modalRoot.hidden = true;
     this.modalRoot.innerHTML = '';
-    this.modalRoot.onclick = null;
     const resolve = this.modalResolve;
     this.modalResolve = null;
     if (resolve) resolve(result);
@@ -225,24 +305,11 @@ export class UI {
   }
 
   render(html) {
+    if (!this.contentEl) return;
     this.contentEl.innerHTML = html;
     this.contentEl.classList.remove('fade-in');
     void this.contentEl.offsetWidth;
     this.contentEl.classList.add('fade-in');
-    if (!this._contentBound) {
-      this._contentBound = true;
-      this.contentEl.addEventListener('click', (e) => {
-        const actionEl = e.target.closest('[data-action]');
-        if (!actionEl || !this.contentEl.contains(actionEl)) return;
-        e.preventDefault();
-        this.emit('action', {
-          action: actionEl.dataset.action,
-          id: actionEl.dataset.id,
-          el: actionEl,
-          event: e
-        });
-      });
-    }
   }
 
   money(amount, currency = 'RUB') {
@@ -558,8 +625,10 @@ export class UI {
     const inc = incomeStructure.map((s, i) => ({ name: s.source, amount: s.amount, color: `hsl(${120 + i * 40} 65% 50%)` }));
     drawDonut(this.contentEl.querySelector('#chart-a-exp'), exp);
     drawDonut(this.contentEl.querySelector('#chart-a-inc'), inc);
-    this.contentEl.querySelector('#leg-a-exp').innerHTML = legendHtml(exp);
-    this.contentEl.querySelector('#leg-a-inc').innerHTML = legendHtml(inc);
+    const legExp = this.contentEl.querySelector('#leg-a-exp');
+    const legInc = this.contentEl.querySelector('#leg-a-inc');
+    if (legExp) legExp.innerHTML = legendHtml(exp);
+    if (legInc) legInc.innerHTML = legendHtml(inc);
     drawBars(this.contentEl.querySelector('#chart-a-env'), envelopes.map((e) => ({ label: e.name, amount: e.amount, color: e.color })));
     drawBars(this.contentEl.querySelector('#chart-a-year'), (yearly || []).map((y) => ({ label: y.title, amount: y.expenses, color: '#3d8bfd' })));
   }
@@ -630,12 +699,6 @@ export class UI {
         <p class="muted" style="margin-top:12px">Все данные хранятся только в LocalStorage этого браузера. Перед очисткой потребуется подтверждение.</p>
       </section>
     `);
-    this.contentEl.querySelector('#setting-theme').addEventListener('change', (e) => {
-      this.emit('settings-theme', e.target.value);
-    });
-    this.contentEl.querySelector('#setting-currency').addEventListener('change', (e) => {
-      this.emit('settings-currency', e.target.value);
-    });
   }
 
   renderNotifications(items) {

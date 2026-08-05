@@ -25,13 +25,30 @@ class App {
   }
 
   init() {
-    settingsService.applyTheme();
-    this.currency = settingsService.get().currency || 'RUB';
-    this.ui.mount();
-    this.bind();
-    storage.subscribe(() => this.refreshChrome());
-    this.navigate('dashboard');
-    this.refreshChrome();
+    try {
+      settingsService.applyTheme();
+      this.currency = settingsService.get().currency || 'RUB';
+      this.ui.mount();
+      this.bind();
+      storage.subscribe(() => {
+        if (!this.ui.isModalOpen()) this.refreshChrome();
+        else {
+          this.ui.updateNotificationBadge(notificationService.getUnreadCount());
+        }
+      });
+      this.navigate('dashboard');
+      this.refreshChrome();
+    } catch (error) {
+      console.error('Ошибка запуска приложения', error);
+      const root = document.getElementById('app');
+      if (root) {
+        root.innerHTML = `<div style="padding:24px;color:#fff;font-family:sans-serif">
+          <h2>Ошибка запуска</h2>
+          <p>${String(error.message || error)}</p>
+          <p>Откройте приложение через локальный сервер (например <code>npx serve .</code>), не через file://</p>
+        </div>`;
+      }
+    }
   }
 
   bind() {
@@ -40,6 +57,10 @@ class App {
     this.ui.on('open-period', () => this.openPeriodDialog());
     this.ui.on('close-month', () => this.closeMonth());
     this.ui.on('notifications', () => this.showNotifications());
+    this.ui.on('notif-read', (id) => {
+      notificationService.markRead(id);
+      this.ui.updateNotificationBadge(notificationService.getUnreadCount());
+    });
     this.ui.on('settings-theme', (theme) => {
       settingsService.setTheme(theme);
       this.ui.toast('Тема обновлена', 'success');
@@ -565,19 +586,7 @@ class App {
 
   async showNotifications() {
     const items = notificationService.getAll();
-    const actionPromise = this.ui.renderNotifications(items);
-    // Пока модалка открыта — отмечаем отдельные уведомления
-    requestAnimationFrame(() => {
-      this.ui.modalRoot.querySelectorAll('[data-notif]').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          notificationService.markRead(btn.dataset.notif);
-          btn.closest('.list-item')?.classList.remove('unread');
-          this.refreshChrome();
-        });
-      });
-    });
-    const action = await actionPromise;
+    const action = await this.ui.renderNotifications(items);
     if (action === 'read-all') {
       notificationService.markAllRead();
       this.ui.toast('Все уведомления прочитаны', 'success');
@@ -627,6 +636,19 @@ class App {
 }
 
 const app = new App();
-app.init();
+
+function boot() {
+  if (!document.getElementById('app')) {
+    console.error('Элемент #app не найден');
+    return;
+  }
+  app.init();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', boot);
+} else {
+  boot();
+}
 
 export default app;
