@@ -490,27 +490,119 @@ export class UI {
     `);
   }
 
-  renderCredits(list, summary, currency) {
+  renderCredits(summary, currency) {
+    const items = summary.items || [];
+    const fmt = (v) => formatMoney(Number.isFinite(Number(v)) ? Number(v) : 0, currency);
+    const dash = (v) => (v == null || v === '' ? '—' : v);
+    const monthsLabel = (m) => (m == null ? '—' : `${m} мес.`);
+
     this.render(`
-      ${this.toolbar('Кредиты', `Долг ${formatMoney(summary.totalDebt, currency)} · платежи ${formatMoney(summary.monthly, currency)}/мес`, [
+      ${this.toolbar('Кредиты', 'Аналитика по всем кредитам', [
         '<button class="btn btn-primary" data-action="add-credit" type="button">+ Кредит</button>'
       ])}
-      ${this.list(list.map((item) => `
-        <article class="list-item glass-soft">
-          <div class="list-main">
-            <strong>${escapeHtml(item.title)}</strong>
-            <span class="muted">${escapeHtml(item.bank)} · платёж ${item.payment_day}-го · ${formatMoney(item.monthly_payment, currency)}</span>
-          </div>
-          <div class="list-side">
-            <strong>${formatMoney(item.current_balance, currency)}</strong>
-            <div class="btn-row">
-              <button class="btn btn-primary btn-sm" data-action="pay-credit" data-id="${item.id}" type="button">Оплатить</button>
+      ${this.stats([
+        { icon: '🏦', label: 'Кредитов (активных)', value: String(summary.count || 0), tone: 'blue' },
+        { icon: '💳', label: 'Общий остаток', value: fmt(summary.totalDebt), tone: 'red' },
+        { icon: '💵', label: 'Платежи в месяц', value: fmt(summary.monthly), tone: 'orange' },
+        { icon: '💰', label: 'Первоначальная сумма', value: fmt(summary.totalInitial), tone: 'purple' },
+        { icon: '💸', label: 'Уже выплачено', value: fmt(summary.totalPaid), tone: 'green' },
+        { icon: '💲', label: 'Переплата', value: fmt(summary.totalOverpayment), tone: 'yellow' },
+        { icon: '📊', label: 'Средний прогресс', value: `${summary.avgProgress || 0}%`, tone: 'cyan' },
+        {
+          icon: '📆',
+          label: 'Ближайший платёж',
+          value: summary.nearestPayment
+            ? `${formatDate(summary.nearestPayment)}${summary.nearestAmount ? ` · ${fmt(summary.nearestAmount)}` : ''}`
+            : '—',
+          tone: 'mint'
+        }
+      ])}
+      ${summary.nearestTitle ? `<p class="muted" style="margin:-8px 0 16px">Ближайший: ${escapeHtml(summary.nearestTitle)}</p>` : ''}
+
+      <div class="envelope-grid credits-cards">
+        ${items.map((item) => `
+          <article class="envelope-card glass credit-card">
+            <div class="envelope-top">
+              <span>🏦</span>
+              <div>
+                <strong>${escapeHtml(item.title)}</strong>
+                <div class="muted">${escapeHtml(item.bank)} · ${escapeHtml(item.statusLabel)}</div>
+              </div>
+            </div>
+            <div class="credit-meta-grid">
+              <div><span>💰 Первоначальная</span><strong>${fmt(item.initial_amount)}</strong></div>
+              <div><span>💳 Остаток</span><strong>${fmt(item.current_balance)}</strong></div>
+              <div><span>💸 Выплачено</span><strong>${fmt(item.paid)}</strong></div>
+              <div><span>⏳ Осталось платить</span><strong>${fmt(item.remaining)}</strong></div>
+              <div><span>📈 Ставка</span><strong>${item.interest_rate}%</strong></div>
+              <div><span>💵 Платёж</span><strong>${fmt(item.monthly_payment)}</strong></div>
+              <div><span>📅 День платежа</span><strong>${item.payment_day}-е</strong></div>
+              <div><span>📆 Следующий</span><strong>${item.nextPayment ? formatDate(item.nextPayment) : '—'}</strong></div>
+              <div><span>⏳ Осталось месяцев</span><strong>${monthsLabel(item.monthsLeft)}</strong></div>
+              <div><span>💲 Переплата</span><strong>${fmt(item.overpayment)}</strong></div>
+              <div><span>🏁 Закрытие</span><strong>${item.estimatedCloseDate ? formatDate(item.estimatedCloseDate) : '—'}</strong></div>
+              <div><span>📊 Погашение</span><strong>${item.progress}%</strong></div>
+            </div>
+            <div class="progress-row">
+              <div class="progress-meta"><span>Прогресс</span><span>${item.progress}%</span></div>
+              <div class="progress-bar progress-tone-${item.progressTone}"><i style="width:${item.progress}%"></i></div>
+            </div>
+            <div class="btn-row wrap">
+              ${item.status === 'active' ? `
+                <button class="btn btn-primary btn-sm" data-action="pay-credit" data-id="${item.id}" type="button">Оплатить</button>
+                <button class="btn btn-ghost btn-sm" data-action="early-pay-credit" data-id="${item.id}" type="button">Досрочно</button>
+              ` : ''}
               <button class="btn btn-ghost btn-sm" data-action="edit-credit" data-id="${item.id}" type="button">Изменить</button>
               <button class="btn btn-danger btn-sm" data-action="delete-credit" data-id="${item.id}" type="button">Удалить</button>
             </div>
-          </div>
-        </article>
-      `))}
+          </article>
+        `).join('') || this.empty('Кредитов пока нет')}
+      </div>
+
+      <section class="panel glass" style="margin-top:18px; overflow:auto">
+        <div class="panel-head"><h3>Таблица кредитов</h3></div>
+        ${items.length ? `
+          <table class="credits-table">
+            <thead>
+              <tr>
+                <th>Банк</th>
+                <th>Кредит</th>
+                <th>Первоначальная</th>
+                <th>Остаток</th>
+                <th>Выплачено</th>
+                <th>Платёж</th>
+                <th>Ставка</th>
+                <th>Осталось мес.</th>
+                <th>Следующий платёж</th>
+                <th>Прогресс</th>
+                <th>Статус</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map((item) => `
+                <tr>
+                  <td>${escapeHtml(item.bank)}</td>
+                  <td>${escapeHtml(item.title)}</td>
+                  <td>${fmt(item.initial_amount)}</td>
+                  <td>${fmt(item.current_balance)}</td>
+                  <td>${fmt(item.paid)}</td>
+                  <td>${fmt(item.monthly_payment)}</td>
+                  <td>${item.interest_rate}%</td>
+                  <td>${dash(item.monthsLeft)}</td>
+                  <td>${item.nextPayment ? formatDate(item.nextPayment) : '—'}</td>
+                  <td>
+                    <div class="progress-bar progress-tone-${item.progressTone}" style="min-width:90px">
+                      <i style="width:${item.progress}%"></i>
+                    </div>
+                    <span class="muted">${item.progress}%</span>
+                  </td>
+                  <td>${escapeHtml(item.statusLabel)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : this.empty('Нет данных для таблицы')}
+      </section>
     `);
   }
 

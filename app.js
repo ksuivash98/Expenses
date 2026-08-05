@@ -113,7 +113,7 @@ class App {
         this.ui.renderExpenses(expensesService.getAll(), expensesService.getSummary(), c);
         break;
       case 'credits':
-        this.ui.renderCredits(creditsService.getActive(), creditsService.getSummary(), c);
+        this.ui.renderCredits(creditsService.getSummary(), c);
         break;
       case 'utilities':
         this.ui.renderUtilities(utilitiesService.getAll(), utilitiesService.getSummary(), c);
@@ -174,6 +174,7 @@ class App {
         case 'add-credit': return this.formCredit();
         case 'edit-credit': return this.formCredit(id);
         case 'pay-credit': return this.payCredit(id);
+        case 'early-pay-credit': return this.earlyPayCredit(id);
         case 'delete-credit': return this.deleteCredit(id);
         case 'add-utility': return this.formUtility();
         case 'pay-utility': return this.payUtility(id);
@@ -378,6 +379,7 @@ class App {
       { name: 'interest_rate', label: 'Ставка %', type: 'number', step: '0.01', value: existing?.interest_rate ?? 0 },
       { name: 'payment_day', label: 'День платежа', type: 'number', min: 1, value: existing?.payment_day ?? 1, required: true },
       { name: 'start_date', label: 'Дата начала', type: 'date', value: existing?.start_date || todayISO() },
+      { name: 'end_date', label: 'Дата окончания', type: 'date', value: existing?.end_date || '' },
       { name: 'notes', label: 'Заметки', type: 'textarea', value: existing?.notes || '' }
     ], (data) => {
       const result = existing ? creditsService.update(id, data) : creditsService.add(data);
@@ -396,7 +398,39 @@ class App {
       { name: 'date', label: 'Дата', type: 'date', value: todayISO() }
     ], (data) => {
       const result = creditsService.pay(id, data.amount, data.budget_category, data.date);
-      this.ui.toast(result.message || (result.success ? 'Платёж проведён' : 'Ошибка'), result.success ? 'success' : 'error');
+      this.ui.toast(
+        result.message || (result.success ? (result.closed ? 'Кредит закрыт' : 'Платёж проведён') : 'Ошибка'),
+        result.success ? 'success' : 'error'
+      );
+      if (result.success) this.refresh();
+      return result;
+    });
+  }
+
+  async earlyPayCredit(id) {
+    const credit = creditsService.getById(id);
+    if (!credit) return;
+    const balance = Number(credit.current_balance) || 0;
+    if (!(balance > 0)) {
+      this.ui.toast('Остаток уже нулевой', 'warning');
+      return;
+    }
+    await this.formDialog(`Досрочное погашение: ${credit.title}`, [
+      { name: 'amount', label: 'Сумма', type: 'number', step: '0.01', value: balance, required: true },
+      { name: 'budget_category', label: 'Конверт', type: 'select', options: this.envelopeOptions(), required: true },
+      { name: 'date', label: 'Дата', type: 'date', value: todayISO() }
+    ], (data) => {
+      const result = creditsService.pay(
+        id,
+        data.amount,
+        data.budget_category,
+        data.date,
+        `Досрочное погашение «${credit.title}»`
+      );
+      this.ui.toast(
+        result.message || (result.success ? (result.closed ? 'Кредит закрыт досрочно' : 'Платёж проведён') : 'Ошибка'),
+        result.success ? 'success' : 'error'
+      );
       if (result.success) this.refresh();
       return result;
     });
