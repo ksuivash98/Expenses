@@ -14,7 +14,7 @@ import { historyService } from './history.js';
 import { notificationService } from './notifications.js';
 import { settingsService } from './settings.js';
 import { UI } from './ui.js';
-import { todayISO } from './utils.js';
+import { todayISO, escapeHtml, formatMoney, roundMoney, parseAmount } from './utils.js';
 
 class App {
   constructor() {
@@ -62,9 +62,32 @@ class App {
       this.ui.updateNotificationBadge(notificationService.getUnreadCount());
     });
     this.ui.on('credits-sort-by', (sortBy) => {
-      const prefs = creditsService.getSortPreferences();
-      creditsService.setSortPreferences(sortBy, prefs.sortDir);
+      creditsService.setViewPreferences({ sortBy });
       this.refresh();
+    });
+    this.ui.on('credits-filter', (filter) => {
+      creditsService.setViewPreferences({ filter });
+      this.refresh();
+    });
+    this.ui.on('credits-search', (search) => {
+      clearTimeout(this._creditsSearchTimer);
+      this._creditsSearchTimer = setTimeout(() => {
+        const active = document.activeElement;
+        const keepSearch = active?.id === 'credits-search';
+        const start = keepSearch ? active.selectionStart : null;
+        const end = keepSearch ? active.selectionEnd : null;
+        creditsService.setViewPreferences({ search });
+        this.refresh();
+        if (keepSearch) {
+          const input = document.getElementById('credits-search');
+          if (input) {
+            input.focus();
+            if (start != null && end != null) {
+              try { input.setSelectionRange(start, end); } catch (_) { /* ignore */ }
+            }
+          }
+        }
+      }, 250);
     });
     this.ui.on('settings-theme', (theme) => {
       settingsService.setTheme(theme);
@@ -171,6 +194,7 @@ class App {
         case 'edit-income': return this.formIncome(id);
         case 'delete-income': return this.deleteIncome(id);
         case 'distribute': return this.formDistribute();
+        case 'configure-percents': return this.formConfigurePercents();
         case 'transfer': return this.formTransfer();
         case 'add-category': return this.formCategory();
         case 'edit-category': return this.formCategory(id);
@@ -184,11 +208,44 @@ class App {
         case 'delete-credit': return this.deleteCredit(id);
         case 'credits-sort-dir': {
           const dir = el?.dataset?.dir === 'desc' ? 'desc' : 'asc';
-          const prefs = creditsService.getSortPreferences();
-          creditsService.setSortPreferences(prefs.sortBy, dir);
+          creditsService.setViewPreferences({ sortDir: dir });
           this.refresh();
           break;
         }
+        case 'credits-tab': {
+          const tab = el?.dataset?.tab || 'list';
+          creditsService.setViewPreferences({ tab });
+          this.refresh();
+          break;
+        }
+        case 'credits-sort-col': {
+          const col = el?.dataset?.sort;
+          if (col) {
+            creditsService.toggleSort(col);
+            this.refresh();
+          }
+          break;
+        }
+        case 'credits-export-json': {
+          const result = creditsService.exportJSON();
+          this.ui.toast(result.message, 'success');
+          break;
+        }
+        case 'credits-export-excel': {
+          const result = creditsService.exportExcel();
+          this.ui.toast(result.message, 'success');
+          break;
+        }
+        case 'credits-export-pdf': {
+          const result = creditsService.exportPDF();
+          this.ui.toast(result.message, 'success');
+          break;
+        }
+        case 'credit-history': return this.showCreditHistory(id);
+        case 'goto-credits':
+          creditsService.setViewPreferences({ tab: 'list' });
+          this.navigate('credits');
+          break;
         case 'add-utility': return this.formUtility();
         case 'pay-utility': return this.payUtility(id);
         case 'delete-utility': return this.deleteUtility(id);
@@ -267,39 +324,319 @@ class App {
       this.ui.toast('Нет нераспределённых доходов', 'warning');
       return;
     }
-    const income = undistributed[0];
+
     const envelopes = budgetService.getCategories();
-    const fields = [
-      { name: 'incomeInfo', label: 'Доход', value: `${income.title} · остаток ${income.remaining}`, type: 'text' },
-      ...envelopes.map((e) => ({
-        name: `cat_${e.id}`,
-        label: `${e.icon} ${e.name}`,
-        type: 'number',
-        step: '0.01',
-        min: 0,
-        value: 0
-      }))
-    ];
-    // Make incomeInfo read-only via disabled workaround - use select with one option
-    fields[0] = {
-      name: 'income_id',
-      label: 'Доход',
-      type: 'select',
-      options: undistributed.map((i) => ({ value: i.id, label: `${i.title} (остаток ${i.remaining})` })),
-      value: income.id,
-      required: true
+    const currency = this.currency;
+    let mode = budgetService.getDistributionMode();
+
+    const buildBody = (currentMode, selectedId) => {
+      const income = undistributed.find((i) => i.id === selectedId) || undistributed[0];
+      const remaining = roundMoney(parseAmount(income.remaining));
+      const modeToggle = `
+        <div class="dist-mode-switch" role="radiogroup" aria-label="Режим распределения">
+          <label class="dist-mode-option ${currentMode === 'percent' ? 'active' : ''}">
+            <input type="radio" name="dist_mode" value="percent" ${currentMode === 'percent' ? 'checked' : ''} />
+            <span>🟢 По процентам</span>
+          </label>
+          <label class="dist-mode-option ${currentMode === 'manual' ? 'active' : ''}">
+            <input type="radio" name="dist_mode" value="manual" ${currentMode === 'manual' ? 'checked' : ''} />
+            <span>⚪ Вручную</span>
+          </label>
+        </div>
+        <div class="btn-row wrap" style="margin-bottom:12px">
+          <button class="btn btn-ghost btn-sm" type="button" id="btn-open-percent-settings">⚙ Настроить проценты</button>
+        </div>
+      `;
+
+      const incomeSelect = `
+        <label class="full">Доход
+          <select name="income_id" id="dist-income-id" required>
+            ${undistributed.map((i) => `
+              <option value="${escapeHtml(i.id)}" ${i.id === income.id ? 'selected' : ''}>
+                ${escapeHtml(i.title)} (остаток ${formatMoney(i.remaining, currency)})
+              </option>
+            `).join('')}
+          </select>
+        </label>
+      `;
+
+      if (currentMode === 'percent') {
+        const calc = budgetService.calculatePercentAllocation(remaining);
+        if (!calc.success) {
+          return `
+            <form class="form-grid" id="dist-form">
+              ${modeToggle}
+              ${incomeSelect}
+              <div class="dist-error full">Сумма процентов должна быть равна 100%. Сейчас: ${calc.percentSum || 0}%.</div>
+              <p class="muted full">Откройте «Настроить проценты», затем повторите распределение.</p>
+            </form>
+          `;
+        }
+        return `
+          <form class="form-grid" id="dist-form">
+            ${modeToggle}
+            ${incomeSelect}
+            <div class="dist-preview-wrap full">
+              <table class="dist-preview-table">
+                <thead>
+                  <tr><th>Конверт</th><th>%</th><th>Сумма</th></tr>
+                </thead>
+                <tbody>
+                  ${calc.items.map((item) => `
+                    <tr>
+                      <td>${escapeHtml(item.icon || '')} ${escapeHtml(item.name)}</td>
+                      <td>${item.percent}%</td>
+                      <td>${formatMoney(item.amount, currency)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td><strong>Всего</strong></td>
+                    <td><strong>100%</strong></td>
+                    <td><strong>${formatMoney(calc.total, currency)}</strong></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </form>
+        `;
+      }
+
+      return `
+        <form class="form-grid" id="dist-form">
+          ${modeToggle}
+          ${incomeSelect}
+          ${envelopes.map((e) => `
+            <label>${escapeHtml(e.icon)} ${escapeHtml(e.name)}
+              <input type="number" name="cat_${escapeHtml(e.id)}" step="0.01" min="0" value="0" />
+            </label>
+          `).join('')}
+        </form>
+      `;
     };
 
-    await this.formDialog('Распределение дохода', fields, (data) => {
+    const openDialog = async () => {
+      const selectedId = undistributed[0].id;
+      const actionPromise = this.ui.modal({
+        title: 'Распределение дохода',
+        wide: true,
+        body: buildBody(mode, selectedId),
+        actions: mode === 'percent'
+          ? [
+            { id: 'cancel', label: '✖ Отмена', className: 'btn-ghost' },
+            { id: 'save', label: '✔ Распределить', className: 'btn-primary' }
+          ]
+          : [
+            { id: 'cancel', label: 'Отмена', className: 'btn-ghost' },
+            { id: 'save', label: 'Сохранить', className: 'btn-primary' }
+          ]
+      });
+
+      const root = this.ui.modalRoot;
+      const refresh = (nextMode, incomeId) => {
+        mode = nextMode;
+        budgetService.setDistributionMode(nextMode);
+        const body = root.querySelector('.modal-body');
+        const actions = root.querySelector('.modal-actions');
+        if (body) body.innerHTML = buildBody(nextMode, incomeId);
+        if (actions) {
+          actions.innerHTML = (nextMode === 'percent'
+            ? [
+              { id: 'cancel', label: '✖ Отмена', className: 'btn-ghost' },
+              { id: 'save', label: '✔ Распределить', className: 'btn-primary' }
+            ]
+            : [
+              { id: 'cancel', label: 'Отмена', className: 'btn-ghost' },
+              { id: 'save', label: 'Сохранить', className: 'btn-primary' }
+            ]
+          ).map((a) => `
+            <button class="btn ${a.className}" data-action="${a.id}" type="button">${a.label}</button>
+          `).join('');
+        }
+        wire();
+        const saveBtn = root.querySelector('[data-action="save"]');
+        if (saveBtn && nextMode === 'percent' && !budgetService.areDistributionPercentsValid()) {
+          saveBtn.disabled = true;
+        }
+      };
+
+      const wire = () => {
+        root.querySelectorAll('input[name="dist_mode"]').forEach((input) => {
+          input.addEventListener('change', () => {
+            const incomeId = root.querySelector('#dist-income-id')?.value || undistributed[0].id;
+            refresh(input.value === 'percent' ? 'percent' : 'manual', incomeId);
+          });
+        });
+        const incomeSelect = root.querySelector('#dist-income-id');
+        if (incomeSelect) {
+          incomeSelect.addEventListener('change', () => {
+            refresh(mode, incomeSelect.value);
+          });
+        }
+        const settingsBtn = root.querySelector('#btn-open-percent-settings');
+        if (settingsBtn) {
+          settingsBtn.addEventListener('click', async () => {
+            this.ui.closeModal(null);
+            await this.formConfigurePercents();
+            await openDialog();
+          });
+        }
+      };
+
+      wire();
+      if (mode === 'percent' && !budgetService.areDistributionPercentsValid()) {
+        const saveBtn = root.querySelector('[data-action="save"]');
+        if (saveBtn) saveBtn.disabled = true;
+      }
+
+      const action = await actionPromise;
+      if (action !== 'save') return;
+
+      const data = this.ui.getModalFormData();
+      const incomeId = data.income_id || undistributed[0].id;
+      const income = undistributed.find((i) => i.id === incomeId) || incomeService.getById(incomeId);
+      if (!income) {
+        this.ui.toast('Доход не найден', 'error');
+        return;
+      }
+
+      if (mode === 'percent') {
+        const remaining = incomeService.getRemainingForIncome(incomeId);
+        const calc = budgetService.calculatePercentAllocation(remaining);
+        if (!calc.success) {
+          this.ui.toast(calc.message || 'Проверьте проценты', 'error');
+          return;
+        }
+
+        const result = budgetService.distribute(
+          incomeId,
+          calc.items.map((item) => ({
+            categoryId: item.categoryId,
+            amount: item.amount,
+            percent: item.percent
+          })),
+          { mode: 'percent' }
+        );
+        this.ui.toast(result.message || (result.success ? 'Распределено по процентам' : 'Ошибка'), result.success ? 'success' : 'error');
+        if (result.success) this.refresh();
+        return;
+      }
+
       const allocations = envelopes.map((e) => ({
         categoryId: e.id,
         amount: data[`cat_${e.id}`]
       }));
-      const result = budgetService.distribute(data.income_id, allocations);
+      const result = budgetService.distribute(incomeId, allocations, { mode: 'manual' });
       this.ui.toast(result.message || (result.success ? 'Распределено' : 'Ошибка'), result.success ? 'success' : 'error');
       if (result.success) this.refresh();
-      return result;
+    };
+
+    await openDialog();
+  }
+
+  async formConfigurePercents() {
+    const rows = budgetService.getDistributionPercentRows();
+
+    const buildBody = (currentRows) => {
+      const sum = roundMoney(currentRows.reduce((s, r) => s + (Number(r.percent) || 0), 0));
+      const valid = Math.abs(sum - 100) < 0.01;
+      return `
+        <form class="form-grid" id="percent-config-form">
+          <p class="muted full">Проценты сохраняются в настройках и подставляются при каждом распределении.</p>
+          <div class="dist-percent-list full">
+            ${currentRows.map((row) => `
+              <label class="dist-percent-row">
+                <span>${escapeHtml(row.icon || '')} ${escapeHtml(row.name)}</span>
+                <input
+                  type="number"
+                  name="pct_${escapeHtml(row.id)}"
+                  data-cat-name="${escapeHtml(row.name)}"
+                  class="dist-percent-input"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  value="${row.percent}"
+                />
+                <span class="muted">%</span>
+              </label>
+            `).join('')}
+          </div>
+          <div class="dist-percent-total full ${valid ? 'is-ok' : 'is-bad'}">
+            <span>Итого</span>
+            <strong id="dist-percent-sum">${sum}%</strong>
+          </div>
+          <div class="dist-error full" id="dist-percent-error" ${valid ? 'hidden' : ''}>
+            Сумма процентов должна быть равна 100%.
+          </div>
+          <div class="full">
+            <button class="btn btn-ghost btn-sm" type="button" id="btn-reset-percents">Восстановить проценты по умолчанию</button>
+          </div>
+        </form>
+      `;
+    };
+
+    const actionPromise = this.ui.modal({
+      title: '⚙ Настроить проценты',
+      wide: true,
+      body: buildBody(rows),
+      actions: [
+        { id: 'cancel', label: 'Отмена', className: 'btn-ghost' },
+        { id: 'save', label: 'Сохранить', className: 'btn-primary' }
+      ]
     });
+
+    const root = this.ui.modalRoot;
+    const sync = () => {
+      const inputs = [...root.querySelectorAll('.dist-percent-input')];
+      const sum = roundMoney(inputs.reduce((s, el) => s + (Number(el.value) || 0), 0));
+      const valid = Math.abs(sum - 100) < 0.01;
+      const sumEl = root.querySelector('#dist-percent-sum');
+      const errEl = root.querySelector('#dist-percent-error');
+      const totalEl = root.querySelector('.dist-percent-total');
+      const saveBtn = root.querySelector('[data-action="save"]');
+      if (sumEl) sumEl.textContent = `${sum}%`;
+      if (errEl) errEl.hidden = valid;
+      if (totalEl) {
+        totalEl.classList.toggle('is-ok', valid);
+        totalEl.classList.toggle('is-bad', !valid);
+      }
+      if (saveBtn) saveBtn.disabled = !valid;
+    };
+
+    const wire = () => {
+      root.querySelectorAll('.dist-percent-input').forEach((input) => {
+        input.addEventListener('input', sync);
+      });
+      const resetBtn = root.querySelector('#btn-reset-percents');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+          const result = budgetService.resetDistributionPercents();
+          const body = root.querySelector('.modal-body');
+          if (body) body.innerHTML = buildBody(budgetService.getDistributionPercentRows());
+          wire();
+          sync();
+          this.ui.toast(result.message || 'Проценты восстановлены', 'success');
+        });
+      }
+    };
+
+    wire();
+    sync();
+    const action = await actionPromise;
+    if (action !== 'save') {
+      this.refresh();
+      return;
+    }
+
+    const data = this.ui.getModalFormData();
+    const payload = budgetService.getCategories().map((cat) => ({
+      name: cat.name,
+      percent: data[`pct_${cat.id}`]
+    }));
+    const result = budgetService.saveDistributionPercents(payload);
+    this.ui.toast(result.message || (result.success ? 'Сохранено' : 'Ошибка'), result.success ? 'success' : 'error');
+    if (result.success) this.refresh();
   }
 
   async formTransfer() {
@@ -438,7 +775,8 @@ class App {
         data.amount,
         data.budget_category,
         data.date,
-        `Досрочное погашение «${credit.title}»`
+        `Досрочное погашение «${credit.title}»`,
+        'early'
       );
       this.ui.toast(
         result.message || (result.success ? (result.closed ? 'Кредит закрыт досрочно' : 'Платёж проведён') : 'Ошибка'),
@@ -454,6 +792,27 @@ class App {
     const result = creditsService.remove(id);
     this.ui.toast(result.message || (result.success ? 'Удалено' : 'Ошибка'), result.success ? 'success' : 'error');
     if (result.success) this.refresh();
+  }
+
+  async showCreditHistory(id) {
+    const credit = creditsService.getById(id);
+    if (!credit) return;
+    const ops = creditsService.getOperations(id);
+    const currency = this.currency;
+    await this.ui.modal({
+      title: `История: ${credit.title}`,
+      wide: true,
+      body: ops.length ? `<div class="list">${ops.map((op) => `
+        <article class="list-item glass-soft">
+          <div class="list-main">
+            <strong>${op.date || '—'} · ${op.typeLabel}</strong>
+            <span class="muted">${op.comment || ''}</span>
+          </div>
+          <div class="list-side"><strong>${op.amount} ${currency}</strong></div>
+        </article>
+      `).join('')}</div>` : '<p class="muted">Операций пока нет</p>',
+      actions: [{ id: 'close', label: 'Закрыть', className: 'btn-primary' }]
+    });
   }
 
   async formUtility() {

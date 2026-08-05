@@ -4,7 +4,7 @@
 import { storage } from './storage.js';
 import { budgetService } from './budget.js';
 import {
-  addMonths, daysInMonth, generateId, parseAmount, roundMoney,
+  addMonths, daysInMonth, downloadText, generateId, parseAmount, roundMoney,
   sortByDate, sumBy, todayISO, toISODate, validateRequired
 } from './utils.js';
 
@@ -15,18 +15,42 @@ const STATUS_LABELS = {
 };
 
 export const CREDIT_SORT_OPTIONS = [
-  { value: 'payment_date', label: 'Дата платежа' },
-  { value: 'balance', label: 'Остаток долга' },
-  { value: 'monthly_payment', label: 'Ежемесячный платёж' },
-  { value: 'interest_rate', label: 'Процентная ставка' },
-  { value: 'title', label: 'Название кредита' },
+  { value: 'title', label: 'Название' },
   { value: 'bank', label: 'Банк' },
-  { value: 'end_date', label: 'Дата окончания' },
+  { value: 'balance', label: 'Остаток' },
+  { value: 'initial_amount', label: 'Начальная сумма' },
+  { value: 'monthly_payment', label: 'Платеж' },
+  { value: 'interest_rate', label: '%' },
+  { value: 'overpayment', label: 'Переплата' },
+  { value: 'payment_day', label: 'Дата платежа' },
   { value: 'months_left', label: 'Осталось месяцев' },
-  { value: 'initial_amount', label: 'Начальная сумма' }
+  { value: 'end_date', label: 'Дата окончания' },
+  { value: 'status', label: 'Статус' }
 ];
 
-const DEFAULT_SORT = { sortBy: 'payment_date', sortDir: 'asc' };
+export const CREDIT_FILTER_OPTIONS = [
+  { value: 'all', label: 'Все' },
+  { value: 'active', label: 'Активные' },
+  { value: 'closed', label: 'Закрытые' },
+  { value: 'overdue', label: 'Просроченные' },
+  { value: 'ending_month', label: 'Заканчиваются в этом месяце' }
+];
+
+export const CREDIT_TABS = [
+  { id: 'list', label: '🏦 Кредиты' },
+  { id: 'summary', label: '📊 Сводная' },
+  { id: 'calendar', label: '📅 Календарь' },
+  { id: 'analytics', label: '📈 Аналитика' },
+  { id: 'history', label: '📜 История' }
+];
+
+const DEFAULT_PREFS = {
+  tab: 'list',
+  sortBy: 'title',
+  sortDir: 'asc',
+  filter: 'all',
+  search: ''
+};
 
 function safeNum(value) {
   const n = Number(value);
@@ -138,6 +162,9 @@ export class CreditsService {
 
     const status = credit.status === 'active' ? 'active' : 'closed';
     const nextPayment = status === 'active' ? nextPaymentDate(paymentDay) : null;
+    const daysUntilPayment = status === 'active' && nextPayment != null
+      ? daysUntil(nextPayment)
+      : null;
 
     let monthsLeft = null;
     let daysLeft = null;
@@ -167,6 +194,26 @@ export class CreditsService {
     if (monthsLeft != null && !Number.isFinite(monthsLeft)) monthsLeft = null;
     if (daysLeft != null && !Number.isFinite(daysLeft)) daysLeft = null;
 
+    const overdue = status === 'active' && this._isOverdue(credit.id, paymentDay);
+    let urgency = 'gray';
+    let urgencyIcon = '✔';
+    let urgencyLabel = 'Закрыт';
+    if (status === 'active') {
+      if (overdue || (daysUntilPayment != null && daysUntilPayment < 5)) {
+        urgency = 'red';
+        urgencyIcon = '🔴';
+        urgencyLabel = overdue ? 'Просрочен' : 'Скоро платёж';
+      } else if (daysUntilPayment != null && daysUntilPayment <= 10) {
+        urgency = 'yellow';
+        urgencyIcon = '🟡';
+        urgencyLabel = 'Скоро';
+      } else {
+        urgency = 'green';
+        urgencyIcon = '🟢';
+        urgencyLabel = 'В графике';
+      }
+    }
+
     return {
       ...credit,
       bank: credit.bank || '—',
@@ -184,11 +231,24 @@ export class CreditsService {
       progress,
       progressTone: progressTone(progress),
       nextPayment,
+      daysUntilPayment,
       monthsLeft,
       daysLeft,
       estimatedCloseDate,
-      paidFromPayments
+      paidFromPayments,
+      overdue,
+      urgency,
+      urgencyIcon,
+      urgencyLabel
     };
+  }
+
+  _isOverdue(creditId, paymentDay) {
+    const now = new Date();
+    if (now.getDate() <= paymentDay) return false;
+    const payments = this.getPayments(creditId);
+    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    return !payments.some((p) => String(p.date || '').startsWith(ym));
   }
 
   getEnrichedAll() {
@@ -205,9 +265,10 @@ export class CreditsService {
   _sortValue(item, sortBy) {
     switch (sortBy) {
       case 'payment_date':
-        return item.nextPayment || (item.status === 'active'
-          ? nextPaymentDate(item.payment_day)
-          : null);
+      case 'payment_day':
+        return sortBy === 'payment_day'
+          ? safeNum(item.payment_day)
+          : (item.nextPayment || null);
       case 'balance':
         return safeNum(item.current_balance);
       case 'monthly_payment':
@@ -222,21 +283,25 @@ export class CreditsService {
         return item.end_date || item.estimatedCloseDate || null;
       case 'months_left':
         return item.monthsLeft;
+      case 'overpayment':
+        return safeNum(item.overpayment);
+      case 'status':
+        return item.status === 'active' ? 0 : 1;
       case 'initial_amount':
         return safeNum(item.initial_amount);
       default:
-        return item.nextPayment || null;
+        return String(item.title || '').toLocaleLowerCase('ru');
     }
   }
 
   /**
    * Сортировка: закрытые всегда внизу, внутри групп — по выбранному полю.
    */
-  sortItems(items, sortBy = DEFAULT_SORT.sortBy, sortDir = DEFAULT_SORT.sortDir) {
+  sortItems(items, sortBy = DEFAULT_PREFS.sortBy, sortDir = DEFAULT_PREFS.sortDir) {
     const dir = sortDir === 'desc' ? -1 : 1;
-    const key = CREDIT_SORT_OPTIONS.some((o) => o.value === sortBy)
+    const key = (CREDIT_SORT_OPTIONS.some((o) => o.value === sortBy) || sortBy === 'payment_date')
       ? sortBy
-      : DEFAULT_SORT.sortBy;
+      : DEFAULT_PREFS.sortBy;
 
     return [...(items || [])].sort((a, b) => {
       const aClosed = a.status === 'active' ? 0 : 1;
@@ -259,66 +324,301 @@ export class CreditsService {
     });
   }
 
-  getSortPreferences() {
+  filterItems(items, filter = 'all', search = '') {
+    const q = String(search || '').trim().toLocaleLowerCase('ru');
+    const now = new Date();
+    return (items || []).filter((item) => {
+      if (filter === 'active' && item.status !== 'active') return false;
+      if (filter === 'closed' && item.status === 'active') return false;
+      if (filter === 'overdue' && !item.overdue) return false;
+      if (filter === 'ending_month') {
+        const end = item.end_date || item.estimatedCloseDate;
+        if (!end) return false;
+        const d = new Date(end);
+        if (Number.isNaN(d.getTime())) return false;
+        if (d.getFullYear() !== now.getFullYear() || d.getMonth() !== now.getMonth()) return false;
+      }
+      if (!q) return true;
+      const hay = `${item.title || ''} ${item.bank || ''}`.toLocaleLowerCase('ru');
+      return hay.includes(q);
+    });
+  }
+
+  getViewPreferences() {
     const settings = storage.getSettings() || {};
     const sortBy = CREDIT_SORT_OPTIONS.some((o) => o.value === settings.creditsSortBy)
       ? settings.creditsSortBy
-      : DEFAULT_SORT.sortBy;
+      : DEFAULT_PREFS.sortBy;
     const sortDir = settings.creditsSortDir === 'desc' ? 'desc' : 'asc';
-    return { sortBy, sortDir };
+    const filter = CREDIT_FILTER_OPTIONS.some((o) => o.value === settings.creditsFilter)
+      ? settings.creditsFilter
+      : DEFAULT_PREFS.filter;
+    const tab = CREDIT_TABS.some((t) => t.id === settings.creditsTab)
+      ? settings.creditsTab
+      : DEFAULT_PREFS.tab;
+    const search = String(settings.creditsSearch || '');
+    return { tab, sortBy, sortDir, filter, search };
+  }
+
+  /** @deprecated use getViewPreferences */
+  getSortPreferences() {
+    const p = this.getViewPreferences();
+    return { sortBy: p.sortBy, sortDir: p.sortDir };
+  }
+
+  setViewPreferences(patch = {}) {
+    const current = this.getViewPreferences();
+    const next = {
+      creditsTab: CREDIT_TABS.some((t) => t.id === patch.tab) ? patch.tab : current.tab,
+      creditsSortBy: CREDIT_SORT_OPTIONS.some((o) => o.value === patch.sortBy)
+        ? patch.sortBy
+        : current.sortBy,
+      creditsSortDir: patch.sortDir === 'desc' || patch.sortDir === 'asc'
+        ? patch.sortDir
+        : current.sortDir,
+      creditsFilter: CREDIT_FILTER_OPTIONS.some((o) => o.value === patch.filter)
+        ? patch.filter
+        : current.filter,
+      creditsSearch: patch.search != null ? String(patch.search) : current.search
+    };
+    storage.updateSettings(next);
+    return this.getViewPreferences();
   }
 
   setSortPreferences(sortBy, sortDir) {
-    const nextBy = CREDIT_SORT_OPTIONS.some((o) => o.value === sortBy)
-      ? sortBy
-      : DEFAULT_SORT.sortBy;
-    const nextDir = sortDir === 'desc' ? 'desc' : 'asc';
-    storage.updateSettings({
-      creditsSortBy: nextBy,
-      creditsSortDir: nextDir
-    });
-    return { sortBy: nextBy, sortDir: nextDir };
+    return this.setViewPreferences({ sortBy, sortDir });
   }
 
-  getSummary(sortOverride = null) {
-    const prefs = sortOverride || this.getSortPreferences();
-    const items = this.sortItems(
-      this.getEnrichedAll(),
-      prefs.sortBy,
-      prefs.sortDir
+  toggleSort(column) {
+    const prefs = this.getViewPreferences();
+    if (prefs.sortBy === column) {
+      return this.setViewPreferences({ sortDir: prefs.sortDir === 'asc' ? 'desc' : 'asc' });
+    }
+    return this.setViewPreferences({ sortBy: column, sortDir: 'asc' });
+  }
+
+  getOperations(creditId = null) {
+    const credits = this.getAll();
+    const byId = new Map(credits.map((c) => [c.id, c]));
+    const payments = storage.list('creditPayments', { allPeriods: true });
+    const ops = payments
+      .filter((p) => !creditId || p.credit_id === creditId)
+      .map((p) => {
+        const credit = byId.get(p.credit_id);
+        const comment = String(p.comment || '');
+        const isEarly = /досроч/i.test(comment) || p.kind === 'early';
+        return {
+          id: p.id,
+          date: p.date || p.created_at,
+          credit_id: p.credit_id,
+          creditTitle: credit?.title || '—',
+          bank: credit?.bank || '—',
+          type: isEarly ? 'early' : 'payment',
+          typeLabel: isEarly ? 'Досрочное погашение' : 'Платеж',
+          amount: safeNum(p.amount),
+          comment: comment || '—'
+        };
+      });
+
+    const created = credits
+      .filter((c) => !creditId || c.id === creditId)
+      .map((c) => ({
+        id: `created-${c.id}`,
+        date: c.start_date || c.created_at,
+        credit_id: c.id,
+        creditTitle: c.title || '—',
+        bank: c.bank || '—',
+        type: 'create',
+        typeLabel: 'Добавление',
+        amount: safeNum(c.initial_amount),
+        comment: 'Кредит добавлен'
+      }));
+
+    return sortByDate([...ops, ...created], (o) => o.date, true);
+  }
+
+  getReminders() {
+    return this.getEnrichedActive().map((c) => {
+      const days = c.overdue ? 0 : c.daysUntilPayment;
+      let level = null;
+      if (c.overdue) level = 'overdue';
+      else if (days != null && days <= 1) level = 'day1';
+      else if (days != null && days <= 3) level = 'day3';
+      else if (days != null && days <= 7) level = 'day7';
+      if (!level) return null;
+      return {
+        id: c.id,
+        bank: c.bank,
+        title: c.title,
+        days: days ?? 0,
+        amount: c.monthly_payment,
+        nextPayment: c.nextPayment,
+        level,
+        overdue: Boolean(c.overdue)
+      };
+    }).filter(Boolean)
+      .sort((a, b) => a.days - b.days);
+  }
+
+  getDebtTrend() {
+    const payments = sortByDate(
+      storage.list('creditPayments', { allPeriods: true }),
+      (p) => p.date,
+      false
     );
-    const active = items.filter((c) => c.status === 'active');
+    const active = this.getEnrichedActive();
+    let debt = roundMoney(sumBy(active, (c) => c.current_balance)
+      + sumBy(payments, (p) => safeNum(p.amount)));
+    const points = [{ label: 'Старт', amount: debt }];
+    payments.forEach((p) => {
+      debt = roundMoney(Math.max(0, debt - safeNum(p.amount)));
+      points.push({
+        label: String(p.date || '').slice(5, 10) || '—',
+        amount: debt
+      });
+    });
+    if (points.length === 1) {
+      points.push({ label: 'Сейчас', amount: roundMoney(sumBy(active, (c) => c.current_balance)) });
+    }
+    return points.slice(-12);
+  }
+
+  exportJSON() {
+    const data = {
+      exported_at: new Date().toISOString(),
+      credits: this.getEnrichedAll(),
+      payments: storage.list('creditPayments', { allPeriods: true }),
+      operations: this.getOperations()
+    };
+    downloadText(`credits-export-${todayISO()}.json`, JSON.stringify(data, null, 2));
+    return { success: true, message: 'JSON экспортирован' };
+  }
+
+  exportExcel() {
+    const rows = this.getEnrichedAll();
+    const header = [
+      'Название', 'Банк', 'Остаток', 'Начальная сумма', 'Платеж', '%',
+      'Переплата', 'День платежа', 'Осталось месяцев', 'Дата окончания', 'Статус'
+    ];
+    const lines = [header.join(';')];
+    rows.forEach((r) => {
+      lines.push([
+        r.title, r.bank, r.current_balance, r.initial_amount, r.monthly_payment,
+        r.interest_rate, r.overpayment, r.payment_day, r.monthsLeft ?? '',
+        r.end_date || r.estimatedCloseDate || '', r.statusLabel
+      ].map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';'));
+    });
+    downloadText(`credits-export-${todayISO()}.csv`, `\uFEFF${lines.join('\n')}`, 'text/csv;charset=utf-8');
+    return { success: true, message: 'Excel/CSV экспортирован' };
+  }
+
+  exportPDF() {
+    const rows = this.getEnrichedAll();
+    const html = `<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><title>Кредиты</title>
+      <style>body{font-family:sans-serif;padding:24px}table{border-collapse:collapse;width:100%}
+      th,td{border:1px solid #ccc;padding:8px;text-align:left}h1{margin-bottom:16px}</style></head><body>
+      <h1>Кредиты — экспорт ${todayISO()}</h1>
+      <table><thead><tr>
+        <th>Название</th><th>Банк</th><th>Остаток</th><th>Платеж</th><th>%</th><th>Статус</th>
+      </tr></thead><tbody>
+      ${rows.map((r) => `<tr>
+        <td>${r.title}</td><td>${r.bank}</td><td>${r.current_balance}</td>
+        <td>${r.monthly_payment}</td><td>${r.interest_rate}</td><td>${r.statusLabel}</td>
+      </tr>`).join('')}
+      </tbody></table>
+      <script>window.onload=()=>window.print()</script>
+      </body></html>`;
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    if (!win) {
+      downloadText(`credits-export-${todayISO()}.html`, html, 'text/html');
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    return { success: true, message: 'PDF/печать открыты' };
+  }
+
+  getSummary(override = null) {
+    const prefs = { ...this.getViewPreferences(), ...(override || {}) };
+    const enriched = this.getEnrichedAll();
+    const filtered = this.filterItems(enriched, prefs.filter, prefs.search);
+    const items = this.sortItems(filtered, prefs.sortBy, prefs.sortDir);
+    const cards = this.sortItems(enriched, 'payment_date', 'asc');
+    const active = enriched.filter((c) => c.status === 'active');
+    const closed = enriched.filter((c) => c.status !== 'active');
     const totalDebt = roundMoney(sumBy(active, (c) => c.current_balance));
     const monthly = roundMoney(sumBy(active, (c) => c.monthly_payment));
-    const totalInitial = roundMoney(sumBy(items, (c) => c.initial_amount));
-    const totalPaid = roundMoney(sumBy(items, (c) => c.paid));
-    const totalOverpayment = roundMoney(sumBy(items, (c) => c.overpayment));
+    const totalInitial = roundMoney(sumBy(enriched, (c) => c.initial_amount));
+    const totalPaid = roundMoney(sumBy(enriched, (c) => c.paid));
+    const totalOverpayment = roundMoney(sumBy(enriched, (c) => c.overpayment));
+    const avgRate = active.length
+      ? roundMoney(sumBy(active, (c) => c.interest_rate) / active.length)
+      : 0;
+    const avgOverpayment = enriched.length
+      ? roundMoney(sumBy(enriched, (c) => c.overpayment) / enriched.length)
+      : 0;
     const avgProgress = active.length
       ? roundMoney(sumBy(active, (c) => c.progress) / active.length)
-      : (items.length ? roundMoney(sumBy(items, (c) => c.progress) / items.length) : 0);
+      : (enriched.length ? roundMoney(sumBy(enriched, (c) => c.progress) / enriched.length) : 0);
 
     const upcoming = active
       .filter((c) => c.nextPayment)
       .sort((a, b) => String(a.nextPayment).localeCompare(String(b.nextPayment)));
+
     const nearest = upcoming[0] || null;
+    const daysToNext = nearest
+      ? (nearest.overdue ? 0 : (nearest.daysUntilPayment ?? null))
+      : null;
+
+    const chartItems = active
+      .filter((c) => c.current_balance > 0)
+      .map((c, i) => ({
+        name: c.title,
+        amount: c.current_balance,
+        color: `hsl(${(i * 47) % 360} 70% 55%)`
+      }));
+
+    const monthlyBars = active.map((c, i) => ({
+      label: c.title,
+      amount: c.monthly_payment,
+      color: `hsl(${(i * 47 + 20) % 360} 70% 55%)`
+    }));
 
     return {
       totalDebt,
       monthly,
       count: active.length,
-      totalCount: items.length,
+      closedCount: closed.length,
+      totalCount: enriched.length,
+      filteredCount: items.length,
       totalInitial,
       totalPaid,
       totalOverpayment,
+      avgRate: Number.isFinite(avgRate) ? avgRate : 0,
+      avgOverpayment: Number.isFinite(avgOverpayment) ? avgOverpayment : 0,
       avgProgress: Number.isFinite(avgProgress) ? avgProgress : 0,
       avgProgressTone: progressTone(avgProgress),
       nearestPayment: nearest ? nearest.nextPayment : null,
       nearestTitle: nearest ? `${nearest.bank} · ${nearest.title}` : null,
       nearestAmount: nearest ? nearest.monthly_payment : 0,
+      daysToNext,
+      upcoming: upcoming.slice(0, 12),
+      widgetUpcoming: upcoming.slice(0, 5),
+      chartItems,
+      monthlyBars,
+      debtTrend: this.getDebtTrend(),
+      operations: this.getOperations(),
+      reminders: this.getReminders(),
+      tabs: CREDIT_TABS,
+      tab: prefs.tab,
       sortBy: prefs.sortBy,
       sortDir: prefs.sortDir,
+      filter: prefs.filter,
+      search: prefs.search,
       sortOptions: CREDIT_SORT_OPTIONS,
+      filterOptions: CREDIT_FILTER_OPTIONS,
       items,
+      cards,
       active
     };
   }
@@ -391,7 +691,7 @@ export class CreditsService {
     return { success: true, data: updated };
   }
 
-  pay(creditId, amountValue, budgetCategoryId, date = todayISO(), comment = '') {
+  pay(creditId, amountValue, budgetCategoryId, date = todayISO(), comment = '', kind = 'payment') {
     const credit = this.getById(creditId);
     if (!credit) return { success: false, message: 'Кредит не найден' };
     if (credit.status !== 'active') return { success: false, message: 'Кредит не активен' };
@@ -408,6 +708,7 @@ export class CreditsService {
 
     const newBalance = roundMoney(Math.max(0, Number(credit.current_balance) - amount));
     const closed = newBalance <= 0;
+    const isEarly = kind === 'early' || /досроч/i.test(String(comment || ''));
 
     storage.batch((db) => {
       db.add('creditPayments', {
@@ -416,7 +717,10 @@ export class CreditsService {
         amount,
         date,
         budget_category: budgetCategoryId,
-        comment: comment || `Платёж по кредиту «${credit.title}»`
+        kind: isEarly ? 'early' : 'payment',
+        comment: comment || (isEarly
+          ? `Досрочное погашение «${credit.title}»`
+          : `Платёж по кредиту «${credit.title}»`)
       });
       db.add('budgetTransactions', {
         id: generateId(),
@@ -434,10 +738,12 @@ export class CreditsService {
       db.add('history', {
         id: generateId(),
         type: 'credit_payment',
-        title: closed ? `Кредит закрыт: ${credit.title}` : `Платёж по кредиту: ${credit.title}`,
+        title: closed
+          ? `Кредит закрыт: ${credit.title}`
+          : (isEarly ? `Досрочное погашение: ${credit.title}` : `Платёж по кредиту: ${credit.title}`),
         amount,
         description: category.name,
-        icon: closed ? '✅' : '💳',
+        icon: closed ? '✅' : (isEarly ? '⚡' : '💳'),
         date: new Date().toISOString()
       });
     });

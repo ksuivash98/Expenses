@@ -8,6 +8,94 @@ import {
   parseAmount, percent, roundMoney, sortByDate, sumBy, todayISO, validateRequired
 } from './utils.js';
 
+/** Проценты распределения по умолчанию (имена нормализуются: ё→е). */
+export const DEFAULT_DISTRIBUTION_PERCENTS = {
+  долги: 48,
+  ребенок: 20,
+  жизнь: 10,
+  квартира: 7,
+  одежда: 5,
+  бьюти: 5,
+  накопления: 5
+};
+
+function normalizeEnvelopeName(name) {
+  return String(name || '').trim().toLowerCase().replace(/ё/g, 'е');
+}
+
+function defaultPercentForName(name) {
+  const key = normalizeEnvelopeName(name);
+  return Object.prototype.hasOwnProperty.call(DEFAULT_DISTRIBUTION_PERCENTS, key)
+    ? DEFAULT_DISTRIBUTION_PERCENTS[key]
+    : 0;
+}
+
+function lookupPercentMap(map, name) {
+  if (!map || typeof map !== 'object') return null;
+  if (map[name] != null && map[name] !== '') {
+    const n = Number(map[name]);
+    return Number.isFinite(n) ? n : null;
+  }
+  const norm = normalizeEnvelopeName(name);
+  const entry = Object.entries(map).find(([k]) => normalizeEnvelopeName(k) === norm);
+  if (!entry) return null;
+  const n = Number(entry[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Распределяет сумму по процентам так, чтобы итог в копейках совпал с доходом.
+ * Метод наибольших остатков (largest remainder).
+ */
+export function allocateByPercents(totalAmount, rows) {
+  const total = roundMoney(parseAmount(totalAmount));
+  const list = (rows || [])
+    .map((row) => ({
+      categoryId: row.categoryId || row.id,
+      name: row.name || '',
+      icon: row.icon || '📦',
+      color: row.color,
+      percent: Math.max(0, Number(row.percent) || 0)
+    }))
+    .filter((row) => row.categoryId && row.percent > 0);
+
+  if (!(total > 0) || !list.length) {
+    return { items: [], total: 0, percentSum: 0 };
+  }
+
+  const percentSum = roundMoney(sumBy(list, (r) => r.percent));
+  const totalCents = Math.round(total * 100);
+  const parts = list.map((row) => {
+    const exact = (totalCents * row.percent) / 100;
+    const floor = Math.floor(exact);
+    return { ...row, floor, frac: exact - floor };
+  });
+
+  let used = parts.reduce((s, p) => s + p.floor, 0);
+  let remainder = totalCents - used;
+  const ranked = [...parts].sort((a, b) => (b.frac - a.frac) || (b.percent - a.percent) || String(a.name).localeCompare(String(b.name), 'ru'));
+  const centsById = new Map(parts.map((p) => [p.categoryId, p.floor]));
+  for (let i = 0; i < remainder; i += 1) {
+    const target = ranked[i % ranked.length];
+    centsById.set(target.categoryId, (centsById.get(target.categoryId) || 0) + 1);
+  }
+
+  const items = list.map((row) => ({
+    categoryId: row.categoryId,
+    name: row.name,
+    icon: row.icon,
+    color: row.color,
+    percent: row.percent,
+    amount: roundMoney((centsById.get(row.categoryId) || 0) / 100)
+  }));
+
+  return {
+    items,
+    total: roundMoney(sumBy(items, (i) => i.amount)),
+    percentSum
+  };
+}
+
 export class BudgetService {
   getCategories() {
     return [...storage.list('budgetCategories')].sort((a, b) => (a.sort || 0) - (b.sort || 0));
@@ -61,6 +149,7 @@ export class BudgetService {
 
   getSummary() {
     const envelopes = this.getEnvelopes();
+    const percentRows = this.getDistributionPercentRows();
     return {
       envelopes,
       totalBalance: sumBy(envelopes, (e) => e.balance),
@@ -70,8 +159,148 @@ export class BudgetService {
       freeMoney: incomeService.getFreeMoney(),
       totalIncome: incomeService.getTotalIncome(),
       totalDistributed: incomeService.getTotalDistributed(),
-      distributionProgress: percent(incomeService.getTotalDistributed(), incomeService.getTotalIncome())
+      distributionProgress: percent(incomeService.getTotalDistributed(), incomeService.getTotalIncome()),
+      distributionPercents: percentRows,
+      distributionPercentSum: roundMoney(sumBy(percentRows, (r) => r.percent)),
+      distributionPercentsValid: this.areDistributionPercentsValid(),
+      distributionMode: this.getDistributionMode()
     };
+  }
+
+  /* ---------- фиксированные проценты распределения ---------- */
+
+  getDistributionMode() {
+    const mode = storage.getSettings()?.distributionMode;
+    return mode === 'percent' ? 'percent' : 'manual';
+  }
+
+  setDistributionMode(mode) {
+    const value = mode === 'percent' ? 'percent' : 'manual';
+    storage.updateSettings({ distributionMode: value });
+    return value;
+  }
+
+  getStoredDistributionPercents() {
+    const raw = storage.getSettings()?.distributionPercents;
+    return raw && typeof raw === 'object' ? { ...raw } : {};
+  }
+
+  /**
+   * Строки процентов для текущих конвертов (из настроек или дефолтов).
+   */
+  getDistributionPercentRows() {
+    const stored = this.getStoredDistributionPercents();
+    const hasStored = Object.keys(stored).length > 0;
+    return this.getCategories().map((cat) => {
+      const fromStore = lookupPercentMap(stored, cat.name);
+      const percentValue = fromStore != null
+        ? roundMoney(fromStore)
+        : (hasStored ? 0 : defaultPercentForName(cat.name));
+      return {
+        id: cat.id,
+        categoryId: cat.id,
+        name: cat.name,
+        icon: cat.icon,
+        color: cat.color,
+        percent: Math.max(0, percentValue)
+      };
+    });
+  }
+
+  getDistributionPercentsMap() {
+    const map = {};
+    this.getDistributionPercentRows().forEach((row) => {
+      map[row.name] = row.percent;
+    });
+    return map;
+  }
+
+  getDistributionPercentSum(rows = null) {
+    return roundMoney(sumBy(rows || this.getDistributionPercentRows(), (r) => Number(r.percent) || 0));
+  }
+
+  areDistributionPercentsValid(rows = null) {
+    return moneyEquals(this.getDistributionPercentSum(rows), 100);
+  }
+
+  buildDefaultDistributionPercents() {
+    const map = {};
+    this.getCategories().forEach((cat) => {
+      map[cat.name] = defaultPercentForName(cat.name);
+    });
+    return map;
+  }
+
+  resetDistributionPercents() {
+    const map = this.buildDefaultDistributionPercents();
+    storage.updateSettings({ distributionPercents: map });
+    return { success: true, data: map, message: 'Проценты восстановлены' };
+  }
+
+  /**
+   * Сохраняет проценты в settings LocalStorage.
+   * @param {Array<{name:string, percent:number}>|Record<string, number>} input
+   */
+  saveDistributionPercents(input) {
+    const map = {};
+    if (Array.isArray(input)) {
+      input.forEach((row) => {
+        const name = String(row.name || '').trim();
+        if (!name) return;
+        map[name] = Math.max(0, roundMoney(parseAmount(row.percent)));
+      });
+    } else if (input && typeof input === 'object') {
+      Object.entries(input).forEach(([name, value]) => {
+        const key = String(name || '').trim();
+        if (!key) return;
+        map[key] = Math.max(0, roundMoney(parseAmount(value)));
+      });
+    }
+
+    const categories = this.getCategories();
+    const rows = categories.map((cat) => ({
+      name: cat.name,
+      percent: lookupPercentMap(map, cat.name) ?? 0
+    }));
+    const sum = roundMoney(sumBy(rows, (r) => r.percent));
+    if (!moneyEquals(sum, 100)) {
+      return {
+        success: false,
+        message: 'Сумма процентов должна быть равна 100%.',
+        sum
+      };
+    }
+
+    const toStore = {};
+    rows.forEach((r) => { toStore[r.name] = r.percent; });
+    storage.updateSettings({ distributionPercents: toStore });
+    return { success: true, data: toStore, message: 'Проценты сохранены' };
+  }
+
+  /**
+   * Расчёт сумм по процентам для дохода.
+   */
+  calculatePercentAllocation(totalAmount) {
+    const rows = this.getDistributionPercentRows();
+    const percentSum = this.getDistributionPercentSum(rows);
+    if (!moneyEquals(percentSum, 100)) {
+      return {
+        success: false,
+        message: 'Сумма процентов должна быть равна 100%.',
+        percentSum,
+        items: [],
+        total: 0
+      };
+    }
+    const result = allocateByPercents(totalAmount, rows);
+    if (!moneyEquals(result.total, roundMoney(parseAmount(totalAmount)))) {
+      return {
+        success: false,
+        message: 'Ошибка округления: итог не совпал с доходом',
+        ...result
+      };
+    }
+    return { success: true, ...result, percentSum };
   }
 
   createCategory(data) {
@@ -126,14 +355,18 @@ export class BudgetService {
     return { success: true };
   }
 
-  distribute(incomeId, allocations) {
+  distribute(incomeId, allocations, meta = {}) {
     const income = incomeService.getById(incomeId);
     if (!income) return { success: false, message: 'Доход не найден' };
     const remaining = incomeService.getRemainingForIncome(incomeId);
     if (remaining <= 0) return { success: false, message: 'Доход уже распределён' };
 
     const cleaned = (allocations || [])
-      .map((item) => ({ categoryId: item.categoryId, amount: roundMoney(parseAmount(item.amount)) }))
+      .map((item) => ({
+        categoryId: item.categoryId,
+        amount: roundMoney(parseAmount(item.amount)),
+        percent: item.percent != null ? roundMoney(parseAmount(item.percent)) : null
+      }))
       .filter((item) => item.amount > 0);
 
     if (!cleaned.length) return { success: false, message: 'Укажите суммы' };
@@ -152,7 +385,14 @@ export class BudgetService {
       };
     }
 
+    const mode = meta.mode === 'percent' ? 'percent' : 'manual';
     const date = todayISO();
+    const detailLines = cleaned.map((item) => {
+      const category = this.getCategoryById(item.categoryId);
+      const pct = item.percent != null ? `${item.percent}%` : '—';
+      return `${category?.name || '—'}: ${item.amount}${mode === 'percent' ? ` (${pct})` : ''}`;
+    });
+
     storage.batch((db) => {
       cleaned.forEach((item) => {
         const category = this.getCategoryById(item.categoryId);
@@ -162,15 +402,21 @@ export class BudgetService {
           amount: item.amount,
           type: 'distribution',
           date,
-          comment: `Распределение дохода «${income.title}»`,
-          income_id: incomeId
+          comment: mode === 'percent'
+            ? `Распределение по процентам «${income.title}»${item.percent != null ? ` · ${item.percent}%` : ''}`
+            : `Распределение дохода «${income.title}»`,
+          income_id: incomeId,
+          distribution_mode: mode,
+          percent: item.percent
         });
         db.add('history', {
           id: generateId(),
           type: 'distribution',
           title: `В конверт «${category.name}»`,
           amount: item.amount,
-          description: `Из дохода «${income.title}»`,
+          description: mode === 'percent'
+            ? `Из дохода «${income.title}» · ${item.percent != null ? `${item.percent}%` : 'по %'}`
+            : `Из дохода «${income.title}»`,
           icon: '📦',
           date: new Date().toISOString()
         });
@@ -178,14 +424,45 @@ export class BudgetService {
       db.add('history', {
         id: generateId(),
         type: 'distribution',
-        title: `Распределены деньги: ${income.title}`,
+        title: mode === 'percent'
+          ? `Распределение по процентам: ${income.title}`
+          : `Распределены деньги: ${income.title}`,
         amount: totalAllocated,
-        icon: '📦',
-        date: new Date().toISOString()
+        description: [
+          `Доход: ${income.title}`,
+          `Режим: ${mode === 'percent' ? 'по процентам' : 'вручную'}`,
+          `Дата: ${date}`,
+          detailLines.join('; ')
+        ].join(' · '),
+        icon: mode === 'percent' ? '📊' : '📦',
+        date: new Date().toISOString(),
+        income_id: incomeId,
+        income_title: income.title,
+        distribution_mode: mode,
+        percents: mode === 'percent'
+          ? cleaned.reduce((acc, item) => {
+            const category = this.getCategoryById(item.categoryId);
+            if (category && item.percent != null) acc[category.name] = item.percent;
+            return acc;
+          }, {})
+          : null,
+        allocations: cleaned.map((item) => {
+          const category = this.getCategoryById(item.categoryId);
+          return {
+            category_id: item.categoryId,
+            name: category?.name || '—',
+            amount: item.amount,
+            percent: item.percent
+          };
+        })
       });
     });
 
-    return { success: true, data: { totalAllocated } };
+    if (mode === 'percent' || meta.mode === 'manual') {
+      this.setDistributionMode(mode);
+    }
+
+    return { success: true, data: { totalAllocated, mode } };
   }
 
   transfer(fromId, toId, amountValue, comment = '') {

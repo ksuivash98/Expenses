@@ -116,6 +116,63 @@ export function drawBars(canvas, items, options = {}) {
   });
 }
 
+export function drawLine(canvas, items, options = {}) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const width = options.width || canvas.clientWidth || 360;
+  const height = options.height || 180;
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+
+  const data = items || [];
+  if (data.length < 2) {
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.font = '500 13px Manrope, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Недостаточно данных', width / 2, height / 2);
+    return;
+  }
+
+  const max = Math.max(...data.map((i) => Number(i.amount) || 0), 1);
+  const min = Math.min(...data.map((i) => Number(i.amount) || 0), 0);
+  const pad = 24;
+  const chartH = height - 40;
+  const stepX = (width - pad * 2) / (data.length - 1);
+
+  ctx.beginPath();
+  data.forEach((item, index) => {
+    const value = Number(item.amount) || 0;
+    const x = pad + index * stepX;
+    const y = 16 + (1 - (value - min) / (max - min || 1)) * chartH;
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = options.color || '#3d8bfd';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  data.forEach((item, index) => {
+    const value = Number(item.amount) || 0;
+    const x = pad + index * stepX;
+    const y = 16 + (1 - (value - min) / (max - min || 1)) * chartH;
+    ctx.beginPath();
+    ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = options.color || '#3d8bfd';
+    ctx.fill();
+    if (index === 0 || index === data.length - 1 || index % Math.ceil(data.length / 4) === 0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.font = '500 10px Manrope, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(String(item.label || '').slice(0, 6), x, height - 8);
+    }
+  });
+}
+
 export function legendHtml(items) {
   return (items || []).map((item) => `
     <div class="legend-item">
