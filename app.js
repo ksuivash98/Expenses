@@ -144,7 +144,7 @@ class App {
         this.ui.renderCredits(creditsService.getSummary(), c);
         break;
       case 'utilities':
-        this.ui.renderUtilities(utilitiesService.getAll(), utilitiesService.getSummary(), c);
+        this.ui.renderUtilities(utilitiesService.getAll(), utilitiesService.getAnalytics(), c);
         break;
       case 'goals':
         this.ui.renderGoals(goalsService.getSummary(), c);
@@ -168,6 +168,7 @@ class App {
           expenseStructure: analyticsService.getExpenseStructure(),
           incomeStructure: analyticsService.getIncomeStructure(),
           envelopes: analyticsService.getEnvelopeStructure(),
+          utilities: analyticsService.getUtilitiesAnalytics(),
           planFact: analyticsService.getPlanFact(),
           yearly: analyticsService.getYearlyOverview(storage.getCurrentPeriod()?.year || new Date().getFullYear())
         }, c);
@@ -247,6 +248,7 @@ class App {
           this.navigate('credits');
           break;
         case 'add-utility': return this.formUtility();
+        case 'edit-utility': return this.formUtility(id);
         case 'pay-utility': return this.payUtility(id);
         case 'delete-utility': return this.deleteUtility(id);
         case 'add-goal': return this.formGoal();
@@ -815,15 +817,65 @@ class App {
     });
   }
 
-  async formUtility() {
-    await this.formDialog('Коммунальная услуга', [
-      { name: 'service', label: 'Услуга', type: 'select', options: utilitiesService.getServices(), required: true },
-      { name: 'amount', label: 'Сумма', type: 'number', step: '0.01', required: true },
-      { name: 'due_date', label: 'Срок оплаты', type: 'date', value: todayISO(), required: true },
-      { name: 'comment', label: 'Комментарий', type: 'textarea' }
+  async formUtility(id = null) {
+    const existing = id ? utilitiesService.getById(id) : null;
+    if (id && !existing) {
+      this.ui.toast('Услуга не найдена', 'error');
+      return;
+    }
+    if (existing?.status === 'paid') {
+      this.ui.toast('Оплаченную услугу нельзя изменить', 'warning');
+      return;
+    }
+
+    const services = [...utilitiesService.getServices()];
+    if (existing?.service && !services.includes(existing.service)) {
+      services.unshift(existing.service);
+    }
+
+    await this.formDialog(existing ? 'Изменить услугу' : 'Коммунальная услуга', [
+      {
+        name: 'service',
+        label: 'Услуга',
+        type: 'select',
+        options: services,
+        value: existing?.service || services[0],
+        required: true
+      },
+      {
+        name: 'amount',
+        label: 'Сумма',
+        type: 'number',
+        step: '0.01',
+        value: existing?.amount ?? '',
+        required: true
+      },
+      {
+        name: 'due_date',
+        label: 'Срок оплаты',
+        type: 'date',
+        value: existing?.due_date || todayISO(),
+        required: true
+      },
+      {
+        name: 'receipt',
+        label: 'Квитанция / номер',
+        value: existing?.receipt || ''
+      },
+      {
+        name: 'comment',
+        label: 'Комментарий',
+        type: 'textarea',
+        value: existing?.comment || ''
+      }
     ], (data) => {
-      const result = utilitiesService.add(data);
-      this.ui.toast(result.message || (result.success ? 'Добавлено' : 'Ошибка'), result.success ? 'success' : 'error');
+      const result = existing
+        ? utilitiesService.update(id, data)
+        : utilitiesService.add(data);
+      this.ui.toast(
+        result.message || (result.success ? (existing ? 'Сохранено' : 'Добавлено') : 'Ошибка'),
+        result.success ? 'success' : 'error'
+      );
       if (result.success) this.refresh();
       return result;
     });

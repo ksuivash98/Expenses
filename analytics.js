@@ -34,6 +34,14 @@ export class AnalyticsService {
     };
   }
 
+  getUtilityStructure() {
+    return utilitiesService.getStructure();
+  }
+
+  getUtilitiesAnalytics() {
+    return utilitiesService.getAnalytics();
+  }
+
   getExpenseStructure() {
     return expensesService.getStructure();
   }

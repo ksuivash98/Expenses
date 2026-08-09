@@ -1503,6 +1503,10 @@ html[data-theme="light"] .form-grid select,
   border-color: rgba(61, 139, 253, 0.35);
 }
 
+.list-item.utility-overdue {
+  border-color: rgba(255, 77, 109, 0.45);
+}
+
 .cal-day {
   font-weight: 700;
   font-size: 0.9rem;

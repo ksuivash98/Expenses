@@ -816,26 +816,78 @@ export class UI {
 
 
   renderUtilities(list, summary, currency) {
+    const analytics = summary || {};
     this.render(`
-      ${this.toolbar('Коммунальные услуги', `К оплате ${formatMoney(summary.pending, currency)}`, [
+      ${this.toolbar('Коммунальные услуги', `К оплате ${formatMoney(analytics.pending || 0, currency)}`, [
         '<button class="btn btn-primary" data-action="add-utility" type="button">+ Услуга</button>'
       ])}
-      ${this.list(list.map((item) => `
-        <article class="list-item glass-soft">
+      ${this.stats([
+        { icon: '🧾', label: 'Всего за месяц', value: formatMoney(analytics.total || 0, currency), tone: 'blue' },
+        { icon: '⏳', label: 'К оплате', value: formatMoney(analytics.pending || 0, currency), tone: 'orange' },
+        { icon: '✔', label: 'Оплачено', value: formatMoney(analytics.paid || 0, currency), tone: 'green' },
+        { icon: '⚠', label: 'Просрочено', value: formatMoney(analytics.overdueTotal || 0, currency), tone: 'red' },
+        { icon: '📊', label: 'Средний платёж', value: formatMoney(analytics.avgAmount || 0, currency), tone: 'purple' },
+        { icon: '🏆', label: 'Крупнее всего', value: analytics.topService ? `${escapeHtml(analytics.topService)}` : '—', tone: 'cyan' }
+      ])}
+      ${(analytics.totalCount || 0) > 0 ? `
+        <div class="two-col" style="margin-bottom:14px">
+          <section class="panel glass">
+            <div class="panel-head"><h3>Структура по услугам</h3></div>
+            <canvas id="utilities-donut" width="220" height="220"></canvas>
+            <div class="legend" id="utilities-donut-legend"></div>
+          </section>
+          <section class="panel glass">
+            <div class="panel-head"><h3>Статус оплаты</h3></div>
+            <canvas id="utilities-bars" height="180"></canvas>
+            <div class="progress-row" style="margin-top:12px">
+              <div class="progress-meta"><span>Оплачено</span><span>${analytics.progress || 0}%</span></div>
+              <div class="progress-bar"><i style="width:${analytics.progress || 0}%"></i></div>
+            </div>
+            ${analytics.nearestService ? `
+              <p class="muted" style="margin-top:10px">
+                Ближайшая: <strong>${escapeHtml(analytics.nearestService)}</strong>
+                · до ${formatDate(analytics.nearestDue)}
+                · ${formatMoney(analytics.nearestAmount || 0, currency)}
+              </p>
+            ` : ''}
+          </section>
+        </div>
+        <section class="panel glass" style="margin-bottom:14px">
+          <div class="panel-head"><h3>Суммы по услугам</h3></div>
+          <canvas id="utilities-service-bars" height="180"></canvas>
+        </section>
+      ` : ''}
+      ${this.list(list.map((item) => {
+        const overdue = item.status !== 'paid' && item.due_date && String(item.due_date) < new Date().toISOString().slice(0, 10);
+        return `
+        <article class="list-item glass-soft ${overdue ? 'utility-overdue' : ''}">
           <div class="list-main">
             <strong>${escapeHtml(item.service)}</strong>
-            <span class="muted">до ${formatDate(item.due_date)} · ${item.status === 'paid' ? 'оплачено' : 'ожидает'}</span>
+            <span class="muted">до ${formatDate(item.due_date)} · ${item.status === 'paid' ? 'оплачено' : (overdue ? 'просрочено' : 'ожидает')}${item.comment ? ` · ${escapeHtml(item.comment)}` : ''}</span>
           </div>
           <div class="list-side">
             <strong>${formatMoney(item.amount, currency)}</strong>
-            <div class="btn-row">
-              ${item.status !== 'paid' ? `<button class="btn btn-primary btn-sm" data-action="pay-utility" data-id="${item.id}" type="button">Оплатить</button>` : ''}
-              ${item.status !== 'paid' ? `<button class="btn btn-danger btn-sm" data-action="delete-utility" data-id="${item.id}" type="button">Удалить</button>` : ''}
+            <div class="btn-row wrap">
+              ${item.status !== 'paid' ? `
+                <button class="btn btn-primary btn-sm" data-action="pay-utility" data-id="${item.id}" type="button">Оплатить</button>
+                <button class="btn btn-ghost btn-sm" data-action="edit-utility" data-id="${item.id}" type="button">✏ Изменить</button>
+                <button class="btn btn-danger btn-sm" data-action="delete-utility" data-id="${item.id}" type="button">Удалить</button>
+              ` : ''}
             </div>
           </div>
         </article>
-      `))}
+      `;
+      }))}
     `);
+
+    if ((analytics.totalCount || 0) > 0) {
+      const chartItems = analytics.chartItems || [];
+      drawDonut(this.contentEl.querySelector('#utilities-donut'), chartItems, { centerLabel: 'КУслуги' });
+      const legend = this.contentEl.querySelector('#utilities-donut-legend');
+      if (legend) legend.innerHTML = legendHtml(chartItems);
+      drawBars(this.contentEl.querySelector('#utilities-bars'), analytics.statusBars || []);
+      drawBars(this.contentEl.querySelector('#utilities-service-bars'), analytics.serviceBars || []);
+    }
   }
 
   renderGoals(summary, currency) {
@@ -882,7 +934,8 @@ export class UI {
   }
 
   renderAnalytics(data, currency) {
-    const { expenseStructure, incomeStructure, envelopes, planFact, yearly } = data;
+    const { expenseStructure, incomeStructure, envelopes, utilities, planFact, yearly } = data;
+    const util = utilities || {};
     this.render(`
       ${this.toolbar('Аналитика', 'Структура доходов и расходов, план/факт', [
         '<button class="btn btn-ghost" data-action="edit-plan" type="button">План месяца</button>',
@@ -903,6 +956,27 @@ export class UI {
       <section class="panel glass" style="margin-bottom:18px">
         <div class="panel-head"><h3>Конверты</h3></div>
         <canvas id="chart-a-env" height="180"></canvas>
+      </section>
+      <section class="panel glass" style="margin-bottom:18px">
+        <div class="panel-head">
+          <h3>Коммунальные услуги</h3>
+          <span class="muted">${util.totalCount || 0} записей</span>
+        </div>
+        ${this.stats([
+          { icon: '🧾', label: 'Всего', value: formatMoney(util.total || 0, currency), tone: 'blue' },
+          { icon: '⏳', label: 'К оплате', value: formatMoney(util.pending || 0, currency), tone: 'orange' },
+          { icon: '✔', label: 'Оплачено', value: formatMoney(util.paid || 0, currency), tone: 'green' },
+          { icon: '⚠', label: 'Просрочено', value: formatMoney(util.overdueTotal || 0, currency), tone: 'red' }
+        ])}
+        <div class="two-col">
+          <div>
+            <canvas id="chart-a-util" width="220" height="220"></canvas>
+            <div class="legend" id="leg-a-util"></div>
+          </div>
+          <div>
+            <canvas id="chart-a-util-bars" height="180"></canvas>
+          </div>
+        </div>
       </section>
       ${planFact ? `
         <section class="panel glass" style="margin-bottom:18px">
@@ -931,6 +1005,18 @@ export class UI {
     if (legExp) legExp.innerHTML = legendHtml(exp);
     if (legInc) legInc.innerHTML = legendHtml(inc);
     drawBars(this.contentEl.querySelector('#chart-a-env'), envelopes.map((e) => ({ label: e.name, amount: e.amount, color: e.color })));
+
+    const utilChart = (util.chartItems || []).length
+      ? util.chartItems
+      : [{ name: 'Нет данных', amount: 0, color: '#6b7c93' }];
+    drawDonut(this.contentEl.querySelector('#chart-a-util'), util.chartItems || [], { centerLabel: 'КУслуги' });
+    const legUtil = this.contentEl.querySelector('#leg-a-util');
+    if (legUtil) legUtil.innerHTML = legendHtml(util.chartItems || []);
+    drawBars(
+      this.contentEl.querySelector('#chart-a-util-bars'),
+      (util.serviceBars || []).length ? util.serviceBars : utilChart.map((u) => ({ label: u.name, amount: u.amount, color: u.color }))
+    );
+
     drawBars(this.contentEl.querySelector('#chart-a-year'), (yearly || []).map((y) => ({ label: y.title, amount: y.expenses, color: '#3d8bfd' })));
   }
 

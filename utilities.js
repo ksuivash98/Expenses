@@ -4,7 +4,7 @@
 import { storage } from './storage.js';
 import { budgetService } from './budget.js';
 import {
-  generateId, parseAmount, roundMoney, sortByDate, sumBy, todayISO, validateRequired
+  generateId, parseAmount, percent, roundMoney, sortByDate, sumBy, todayISO, validateRequired
 } from './utils.js';
 
 export const UTILITY_SERVICES = [
@@ -41,12 +41,102 @@ export class UtilitiesService {
     return UTILITY_SERVICES;
   }
 
-  getSummary() {
+  /**
+   * Структура сумм по видам услуг (текущий период).
+   */
+  getStructure() {
+    const map = new Map();
+    this.getAll().forEach((item) => {
+      const key = item.service || 'Другое';
+      map.set(key, roundMoney((map.get(key) || 0) + (Number(item.amount) || 0)));
+    });
+    return [...map.entries()]
+      .map(([service, amount]) => ({ service, amount }))
+      .sort((a, b) => b.amount - a.amount);
+  }
+
+  getPaidStructure() {
+    const map = new Map();
+    this.getPaid().forEach((item) => {
+      const key = item.service || 'Другое';
+      map.set(key, roundMoney((map.get(key) || 0) + (Number(item.amount) || 0)));
+    });
+    return [...map.entries()]
+      .map(([service, amount]) => ({ service, amount }))
+      .sort((a, b) => b.amount - a.amount);
+  }
+
+  getOverdue() {
+    const today = todayISO();
+    return this.getPending().filter((u) => u.due_date && String(u.due_date) < today);
+  }
+
+  getAnalytics() {
+    const items = this.getAll();
+    const pending = this.getPending();
+    const paid = this.getPaid();
+    const overdue = this.getOverdue();
+    const structure = this.getStructure();
+    const total = roundMoney(sumBy(items, (u) => Number(u.amount) || 0));
+    const pendingTotal = this.getTotalPending();
+    const paidTotal = this.getTotalPaid();
+    const overdueTotal = roundMoney(sumBy(overdue, (u) => Number(u.amount) || 0));
+    const avgAmount = items.length ? roundMoney(total / items.length) : 0;
+    const top = structure[0] || null;
+    const nearest = [...pending]
+      .filter((u) => u.due_date)
+      .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)))[0] || null;
+
+    const chartItems = structure.map((row, i) => ({
+      name: row.service,
+      amount: row.amount,
+      color: `hsl(${(i * 47 + 200) % 360} 65% 55%)`
+    }));
+
+    const statusBars = [
+      { label: 'К оплате', amount: pendingTotal, color: '#f5a524' },
+      { label: 'Оплачено', amount: paidTotal, color: '#2dd4bf' },
+      { label: 'Просрочено', amount: overdueTotal, color: '#ff4d6d' }
+    ].filter((row) => row.amount > 0);
+
+    const serviceBars = structure.map((row, i) => ({
+      label: row.service,
+      amount: row.amount,
+      color: `hsl(${(i * 47 + 200) % 360} 65% 55%)`
+    }));
+
     return {
-      pending: this.getTotalPending(),
-      paid: this.getTotalPaid(),
-      pendingCount: this.getPending().length,
-      items: this.getAll()
+      pending: pendingTotal,
+      paid: paidTotal,
+      total,
+      pendingCount: pending.length,
+      paidCount: paid.length,
+      totalCount: items.length,
+      overdueCount: overdue.length,
+      overdueTotal,
+      avgAmount,
+      progress: percent(paidTotal, total),
+      topService: top ? top.service : null,
+      topAmount: top ? top.amount : 0,
+      nearestDue: nearest ? nearest.due_date : null,
+      nearestService: nearest ? nearest.service : null,
+      nearestAmount: nearest ? Number(nearest.amount) || 0 : 0,
+      structure,
+      chartItems,
+      statusBars,
+      serviceBars,
+      items
+    };
+  }
+
+  getSummary() {
+    const analytics = this.getAnalytics();
+    return {
+      pending: analytics.pending,
+      paid: analytics.paid,
+      pendingCount: analytics.pendingCount,
+      items: analytics.items,
+      ...analytics
     };
   }
 
