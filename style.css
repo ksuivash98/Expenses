@@ -31,6 +31,10 @@
   --sidebar-width: 280px;
   --chart-center: rgba(10, 18, 34, 0.92);
   --blur: blur(18px);
+  --select-option-bg: #0d1b33;
+  --select-option-text: #f4f7ff;
+  --select-option-checked: #1a3358;
+  color-scheme: dark;
 }
 
 [data-theme="light"] {
@@ -48,6 +52,10 @@
   --shadow: 0 18px 40px rgba(40, 70, 120, 0.12);
   --shadow-soft: 0 8px 20px rgba(40, 70, 120, 0.08);
   --chart-center: rgba(255, 255, 255, 0.95);
+  --select-option-bg: #ffffff;
+  --select-option-text: #122033;
+  --select-option-checked: #e8eef8;
+  color-scheme: light;
 }
 
 *,
@@ -72,6 +80,102 @@ body {
 button, input, select, textarea {
   font: inherit;
   color: inherit;
+}
+
+/*
+ * Нативные <select>/<option>: читаемость в тёмной и светлой теме.
+ * color-scheme влияет на системный выпадающий список (Windows/Chrome/Edge).
+ * Для option нужны непрозрачные цвета — rgba часто игнорируется.
+ */
+select,
+select.input,
+.period-select,
+.form-grid select,
+.modal select,
+.modal-body select {
+  color: var(--text-primary);
+  background-color: var(--surface-soft);
+  color-scheme: inherit;
+}
+
+select option,
+select optgroup,
+.form-grid select option,
+.modal select option,
+.modal-body select option,
+.period-select option,
+select.input option {
+  color: var(--select-option-text);
+  background-color: var(--select-option-bg);
+}
+
+select option:checked,
+select option:focus,
+.form-grid select option:checked,
+.modal select option:checked,
+.modal-body select option:checked {
+  color: var(--select-option-text);
+  background-color: var(--select-option-checked);
+}
+
+select option:disabled,
+.form-grid select option:disabled,
+.modal select option:disabled {
+  color: var(--text-muted);
+}
+
+html[data-theme="dark"] select,
+html[data-theme="dark"] .period-select,
+html[data-theme="dark"] .form-grid select,
+html[data-theme="dark"] .modal select,
+.theme-dark select,
+.theme-dark .period-select,
+.theme-dark .form-grid select,
+.theme-dark .modal select {
+  color-scheme: dark;
+}
+
+html[data-theme="dark"] select option,
+html[data-theme="dark"] select optgroup,
+html[data-theme="dark"] .period-select option,
+html[data-theme="dark"] .form-grid select option,
+html[data-theme="dark"] .modal select option,
+html[data-theme="dark"] .modal-body select option,
+.theme-dark select option,
+.theme-dark select optgroup,
+.theme-dark .period-select option,
+.theme-dark .form-grid select option,
+.theme-dark .modal select option,
+.theme-dark .modal-body select option {
+  color: var(--select-option-text);
+  background-color: var(--select-option-bg);
+}
+
+html[data-theme="light"] select,
+html[data-theme="light"] .period-select,
+html[data-theme="light"] .form-grid select,
+html[data-theme="light"] .modal select,
+.theme-light select,
+.theme-light .period-select,
+.theme-light .form-grid select,
+.theme-light .modal select {
+  color-scheme: light;
+}
+
+html[data-theme="light"] select option,
+html[data-theme="light"] select optgroup,
+html[data-theme="light"] .period-select option,
+html[data-theme="light"] .form-grid select option,
+html[data-theme="light"] .modal select option,
+html[data-theme="light"] .modal-body select option,
+.theme-light select option,
+.theme-light select optgroup,
+.theme-light .period-select option,
+.theme-light .form-grid select option,
+.theme-light .modal select option,
+.theme-light .modal-body select option {
+  color: var(--select-option-text);
+  background-color: var(--select-option-bg);
 }
 
 button {
