@@ -1,0 +1,20 @@
+{
+  "name": "finance-cabinet",
+  "version": "1.0.0",
+  "description": "Автономное веб-приложение для учёта личных финансов. Работает полностью офлайн в браузере.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "npx --yes serve . -p 3000",
+    "serve": "npx --yes serve . -p 3000"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ksuivash98/Expenses.git"
+  },
+  "license": "ISC",
+  "homepage": "https://github.com/ksuivash98/Expenses#readme",
+  "dependencies": {
+    "ogl": "^1.0.11"
+  }
+}

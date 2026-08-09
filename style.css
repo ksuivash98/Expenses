@@ -579,6 +579,35 @@ p {
   color: transparent;
 }
 
+.warp-text {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 18ch;
+  height: clamp(88px, 14vw, 140px);
+  min-height: 88px;
+  margin: 0 0 10px;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: 4px;
+}
+
+.warp-text canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: auto;
+}
+
+.warp-text-fallback {
+  margin: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
 .eyebrow {
   text-transform: uppercase;
   letter-spacing: 0.16em;
@@ -1902,6 +1931,11 @@ html[data-theme="light"] .form-grid select,
 
   .brand-wordmark {
     font-size: clamp(2rem, 10vw, 2.8rem);
+  }
+
+  .warp-text {
+    max-width: 100%;
+    height: clamp(72px, 22vw, 110px);
   }
 
   .entity-card {

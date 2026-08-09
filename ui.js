@@ -5,6 +5,7 @@ import {
   escapeHtml, formatDate, formatDateTime, formatMoney, getMonthName, PERIOD_STATUS_LABELS
 } from './utils.js';
 import { drawBars, drawDonut, drawLine, legendHtml } from './charts.js';
+import { createWarpText } from './warpText.js';
 
 function formatDayMonth(iso) {
   if (!iso) return '—';
@@ -37,6 +38,7 @@ export class UI {
     this.modalResolve = null;
     this.lastModalFormData = {};
     this._delegated = false;
+    this._warpText = null;
   }
 
   on(event, handler) {
@@ -328,10 +330,46 @@ export class UI {
 
   render(html) {
     if (!this.contentEl) return;
+    this.destroyWarpText();
     this.contentEl.innerHTML = html;
     this.contentEl.classList.remove('fade-in');
     void this.contentEl.offsetWidth;
     this.contentEl.classList.add('fade-in');
+  }
+
+  destroyWarpText() {
+    if (this._warpText) {
+      try {
+        this._warpText.destroy();
+      } catch (_) {
+        /* ignore */
+      }
+      this._warpText = null;
+    }
+  }
+
+  mountHeroWarpText() {
+    const host = this.contentEl?.querySelector('#hero-warp');
+    if (!host) return;
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light'
+      || document.body.classList.contains('theme-light');
+    this.destroyWarpText();
+    this._warpText = createWarpText(host, {
+      text: 'Кабинет',
+      color: isLight ? '#14201c' : '#eef3ef',
+      warpStrength: 0.08,
+      warpScale: 1.7,
+      speed: 0.55,
+      pointerInfluence: 0.42,
+      pointerStrength: 0.38,
+      refraction: 0.018,
+      ripple: true,
+      fontSize: 'clamp(2.4rem, 5vw, 3.6rem)',
+      fontWeight: 600,
+      fontFamily: 'Fraunces, Georgia, serif',
+      letterSpacing: '-0.04em',
+      lineHeight: 0.9
+    });
   }
 
   money(amount, currency = 'RUB') {
@@ -376,7 +414,7 @@ export class UI {
     this.render(`
       <section class="hero-panel glass">
         <div class="hero-copy">
-          <p class="brand-wordmark">Кабинет</p>
+          <div class="warp-text" id="hero-warp" role="img" aria-label="Кабинет"></div>
           <div class="eyebrow">Текущий период</div>
           <h2>${escapeHtml(period ? `${PERIOD_STATUS_LABELS[period.status] || ''} · ${period.year}-${String(period.month).padStart(2, '0')}` : '—')}</h2>
           <p class="muted">Доходы, конверты и платежи за выбранный месяц</p>
@@ -465,6 +503,7 @@ export class UI {
     drawDonut(this.contentEl.querySelector('#chart-expenses'), expenseItems, { centerLabel: 'Расходы' });
     const legend = this.contentEl.querySelector('#legend-expenses');
     if (legend) legend.innerHTML = legendHtml(expenseItems);
+    this.mountHeroWarpText();
   }
 
   renderIncome(list, summary, currency) {
