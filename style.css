@@ -5,9 +5,9 @@
  */
 
 :root {
-  --font-display: 'Fraunces', Georgia, serif;
+  --font-display: 'Source Sans 3', 'Segoe UI', sans-serif;
   --font-body: 'Source Sans 3', 'Segoe UI', sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-mono: 'Source Sans 3', 'Segoe UI', sans-serif;
 
   --bg-1: #0a100e;
   --bg-2: #121a17;
@@ -245,11 +245,10 @@ img {
 }
 
 h1, h2, h3 {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   margin: 0 0 0.35em;
-  letter-spacing: -0.03em;
-  font-optical-sizing: auto;
-  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-weight: 700;
 }
 
 p {
@@ -275,23 +274,27 @@ p {
   pointer-events: none;
   overflow: hidden;
   background:
-    radial-gradient(ellipse 70% 45% at 8% -5%, rgba(60, 184, 138, 0.12), transparent 55%),
-    radial-gradient(ellipse 55% 40% at 92% 8%, rgba(201, 163, 106, 0.08), transparent 50%),
+    radial-gradient(ellipse 80% 55% at 12% -8%, rgba(60, 184, 138, 0.38), transparent 58%),
+    radial-gradient(ellipse 60% 45% at 95% 5%, rgba(201, 163, 106, 0.22), transparent 52%),
+    radial-gradient(ellipse 50% 40% at 70% 100%, rgba(47, 120, 90, 0.28), transparent 55%),
     linear-gradient(165deg, var(--bg-1), var(--bg-2) 48%, var(--bg-3));
 }
 
 .silk-host {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 100vh;
   z-index: 0;
-  opacity: 0.72;
+  opacity: 0.88;
   pointer-events: none;
 }
 
 .silk-host canvas {
   display: block;
-  width: 100%;
-  height: 100%;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .app-bg::after {
@@ -299,7 +302,7 @@ p {
   position: absolute;
   inset: 0;
   z-index: 1;
-  opacity: 0.28;
+  opacity: 0.32;
   background-image:
     repeating-linear-gradient(
       -12deg,
@@ -316,17 +319,17 @@ p {
 
 [data-theme="light"] .app-bg {
   background:
-    radial-gradient(ellipse 65% 45% at 0% 0%, rgba(31, 122, 88, 0.1), transparent 55%),
-    radial-gradient(ellipse 50% 40% at 100% 0%, rgba(154, 115, 64, 0.08), transparent 50%),
+    radial-gradient(ellipse 70% 50% at 0% 0%, rgba(31, 122, 88, 0.22), transparent 55%),
+    radial-gradient(ellipse 55% 45% at 100% 0%, rgba(154, 115, 64, 0.16), transparent 50%),
     linear-gradient(165deg, var(--bg-1), var(--bg-2));
 }
 
 [data-theme="light"] .silk-host {
-  opacity: 0.55;
+  opacity: 0.7;
 }
 
 [data-theme="light"] .app-bg::after {
-  opacity: 0.18;
+  opacity: 0.2;
   mix-blend-mode: multiply;
 }
 
@@ -379,7 +382,7 @@ p {
 
 .brand strong {
   display: block;
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: 1.35rem;
   font-weight: 600;
   letter-spacing: -0.03em;
@@ -588,45 +591,36 @@ p {
 }
 
 .brand-wordmark {
-  font-family: var(--font-display);
-  font-size: clamp(2.4rem, 5vw, 3.6rem);
-  font-weight: 600;
-  letter-spacing: -0.04em;
-  line-height: 0.95;
+  font-family: var(--font-body);
+  font-size: clamp(2.6rem, 6vw, 4rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
   margin: 0 0 14px;
-  background: linear-gradient(120deg, var(--text-primary) 30%, var(--accent-ink));
+  max-width: none;
+  white-space: nowrap;
+  overflow: visible;
+  color: var(--text-primary);
+  background: linear-gradient(120deg, var(--text-primary) 20%, var(--accent-ink) 85%);
   -webkit-background-clip: text;
   background-clip: text;
-  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: wordmarkIn 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes wordmarkIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .warp-text {
-  position: relative;
-  display: block;
-  width: 100%;
-  max-width: 18ch;
-  height: clamp(88px, 14vw, 140px);
-  min-height: 88px;
-  margin: 0 0 10px;
-  overflow: hidden;
-  isolation: isolate;
-  border-radius: 4px;
-}
-
-.warp-text canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-  pointer-events: auto;
-}
-
-.warp-text-fallback {
-  margin: 0;
-  height: 100%;
-  display: flex;
-  align-items: center;
+  display: none;
 }
 
 .eyebrow {
@@ -790,7 +784,7 @@ p {
 
 .stat-value {
   margin: 0;
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: 1.05rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -931,7 +925,7 @@ p {
 }
 
 .env-balance {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-weight: 700;
   font-size: 1.1rem;
   margin-bottom: 4px;
@@ -988,7 +982,7 @@ p {
 }
 
 .amount {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: 1.15rem;
 }
 
@@ -1301,7 +1295,7 @@ html[data-theme="light"] .settings-grid select,
 }
 
 .credits-upcoming-amount {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -1424,7 +1418,7 @@ textarea.input {
   display: grid;
   place-items: center;
   font-weight: 700;
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: 1.35rem;
   color: #062018;
   background: linear-gradient(145deg, #c9a36a 0%, #3cb88a 70%);
@@ -1438,7 +1432,7 @@ textarea.input {
 .list-side strong,
 .mini-stat strong,
 .credits-upcoming-amount {
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
@@ -1532,7 +1526,7 @@ html[data-theme="light"] .period-select,
 }
 
 .envelope-balance {
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: 1.2rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -1951,12 +1945,8 @@ html[data-theme="light"] .form-grid select,
   }
 
   .brand-wordmark {
-    font-size: clamp(2rem, 10vw, 2.8rem);
-  }
-
-  .warp-text {
-    max-width: 100%;
-    height: clamp(72px, 22vw, 110px);
+    font-size: clamp(2.2rem, 11vw, 3rem);
+    white-space: normal;
   }
 
   .entity-card {
@@ -2085,7 +2075,7 @@ html[data-theme="light"] .form-grid select,
 }
 
 .period-current strong {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: 0.95rem;
 }
 
@@ -2381,5 +2371,6 @@ html[data-theme="light"] .form-grid select,
   cursor: not-allowed;
   pointer-events: none;
 }
+
 
 

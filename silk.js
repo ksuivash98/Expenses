@@ -72,18 +72,18 @@ void main() {
 
 export const SILK_THEME = {
   dark: {
-    speed: 4.2,
-    scale: 1.15,
-    color: '#1e4a3c',
-    noiseIntensity: 1.35,
-    rotation: 0.08
+    speed: 4.5,
+    scale: 1.2,
+    color: '#3a8f72',
+    noiseIntensity: 1.4,
+    rotation: 0.1
   },
   light: {
-    speed: 3.6,
-    scale: 1.05,
-    color: '#8fb9a6',
-    noiseIntensity: 1.15,
-    rotation: 0.04
+    speed: 3.8,
+    scale: 1.1,
+    color: '#6fad93',
+    noiseIntensity: 1.2,
+    rotation: 0.05
   }
 };
 
@@ -162,8 +162,9 @@ export function createSilk(container, options = {}) {
   const resize = () => {
     if (disposed) return;
     const rect = container.getBoundingClientRect();
-    const w = Math.max(1, Math.floor(rect.width));
-    const h = Math.max(1, Math.floor(rect.height));
+    const w = Math.max(1, Math.floor(rect.width) || window.innerWidth || 1);
+    const h = Math.max(1, Math.floor(rect.height) || window.innerHeight || 1);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(w, h, false);
     canvas.style.width = '100%';
     canvas.style.height = '100%';

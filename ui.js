@@ -112,7 +112,7 @@ export class UI {
     `).join('');
 
     this.bindGlobalEvents();
-    this.mountSilkBackground();
+    requestAnimationFrame(() => this.mountSilkBackground());
   }
 
   mountSilkBackground() {
@@ -141,38 +141,6 @@ export class UI {
       return;
     }
     this.mountSilkBackground();
-  }
-
-  mountHeroWarpText() {
-    const host = this.contentEl?.querySelector('#hero-warp');
-    if (!host) return;
-    const isLight = document.documentElement.getAttribute('data-theme') === 'light'
-      || document.body.classList.contains('theme-light');
-    this.destroyWarpText();
-    import('./warpText.js')
-      .then(({ createWarpText }) => {
-        if (!this.contentEl?.contains(host)) return;
-        this._warpText = createWarpText(host, {
-          text: 'Кабинет',
-          color: isLight ? '#14201c' : '#eef3ef',
-          warpStrength: 0.08,
-          warpScale: 1.7,
-          speed: 0.55,
-          pointerInfluence: 0.42,
-          pointerStrength: 0.38,
-          refraction: 0.018,
-          ripple: true,
-          fontSize: 'clamp(2.4rem, 5vw, 3.6rem)',
-          fontWeight: 600,
-          fontFamily: 'Fraunces, Georgia, serif',
-          letterSpacing: '-0.04em',
-          lineHeight: 0.9
-        });
-      })
-      .catch((error) => {
-        console.warn('WarpText отключён:', error);
-        host.innerHTML = '<p class="brand-wordmark warp-text-fallback">Кабинет</p>';
-      });
   }
 
   bindGlobalEvents() {
@@ -454,9 +422,7 @@ export class UI {
     this.render(`
       <section class="hero-panel glass">
         <div class="hero-copy">
-          <div class="warp-text" id="hero-warp" role="img" aria-label="Кабинет">
-            <p class="brand-wordmark warp-text-fallback">Кабинет</p>
-          </div>
+          <p class="brand-wordmark">Кабинет</p>
           <div class="eyebrow">Текущий период</div>
           <h2>${escapeHtml(period ? `${PERIOD_STATUS_LABELS[period.status] || ''} · ${period.year}-${String(period.month).padStart(2, '0')}` : '—')}</h2>
           <p class="muted">Доходы, конверты и платежи за выбранный месяц</p>
@@ -545,7 +511,6 @@ export class UI {
     drawDonut(this.contentEl.querySelector('#chart-expenses'), expenseItems, { centerLabel: 'Расходы' });
     const legend = this.contentEl.querySelector('#legend-expenses');
     if (legend) legend.innerHTML = legendHtml(expenseItems);
-    this.mountHeroWarpText();
   }
 
   renderIncome(list, summary, currency) {

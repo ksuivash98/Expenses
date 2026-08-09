@@ -56,7 +56,7 @@ export function drawDonut(canvas, items, options = {}) {
   ctx.fill();
 
   ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim() || '#fff';
-  ctx.font = '700 15px Fraunces, sans-serif';
+  ctx.font = '700 15px Source Sans 3, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(formatMoney(total), cx, cy - 8);
