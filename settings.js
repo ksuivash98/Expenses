@@ -16,6 +16,7 @@ export class SettingsService {
   setTheme(theme) {
     const value = theme === 'light' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', value);
+    document.documentElement.style.colorScheme = value;
     document.body.classList.toggle('theme-light', value === 'light');
     document.body.classList.toggle('theme-dark', value !== 'light');
     return this.update({ theme: value });
@@ -24,6 +25,7 @@ export class SettingsService {
   applyTheme() {
     const theme = this.get().theme || 'dark';
     document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.style.colorScheme = theme === 'light' ? 'light' : 'dark';
     document.body.classList.toggle('theme-light', theme === 'light');
     document.body.classList.toggle('theme-dark', theme !== 'light');
   }

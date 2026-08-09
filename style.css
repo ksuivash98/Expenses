@@ -34,6 +34,8 @@
   --select-option-bg: #0d1b33;
   --select-option-text: #f4f7ff;
   --select-option-checked: #1a3358;
+  --select-bg: #14233d;
+  --select-text: #f4f7ff;
   color-scheme: dark;
 }
 
@@ -55,6 +57,8 @@
   --select-option-bg: #ffffff;
   --select-option-text: #122033;
   --select-option-checked: #e8eef8;
+  --select-bg: #ffffff;
+  --select-text: #122033;
   color-scheme: light;
 }
 
@@ -79,103 +83,145 @@ body {
 
 button, input, select, textarea {
   font: inherit;
+}
+
+button, input, textarea {
   color: inherit;
 }
 
 /*
- * Нативные <select>/<option>: читаемость в тёмной и светлой теме.
- * color-scheme влияет на системный выпадающий список (Windows/Chrome/Edge).
- * Для option нужны непрозрачные цвета — rgba часто игнорируется.
+ * Нативные <select>/<option>.
+ * На Windows Chrome/Edge выпадающий список часто рисуется системой:
+ * полупрозрачный фон → «светлая» схема → белый popup + светлый текст.
+ * Нужны: непрозрачный фон, явный color-scheme, Canvas/CanvasText.
  */
+html,
+body.theme-dark,
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+html[data-theme="light"],
+body.theme-light {
+  color-scheme: light;
+}
+
 select,
 select.input,
 .period-select,
 .form-grid select,
+.settings-grid select,
 .modal select,
-.modal-body select {
-  color: var(--text-primary);
-  background-color: var(--surface-soft);
-  color-scheme: inherit;
+.modal-body select,
+.filters select {
+  color: var(--select-text);
+  background-color: var(--select-bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23f4f7ff' d='M1.4 1.2L6 5.4l4.6-4.2' stroke='%23f4f7ff' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px 8px;
+  padding: 11px 36px 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  outline: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  color-scheme: dark;
+}
+
+html[data-theme="light"] select,
+html[data-theme="light"] select.input,
+html[data-theme="light"] .period-select,
+html[data-theme="light"] .form-grid select,
+html[data-theme="light"] .settings-grid select,
+html[data-theme="light"] .modal select,
+html[data-theme="light"] .modal-body select,
+html[data-theme="light"] .filters select,
+.theme-light select,
+.theme-light select.input,
+.theme-light .period-select,
+.theme-light .form-grid select,
+.theme-light .settings-grid select,
+.theme-light .modal select,
+.theme-light .modal-body select,
+.theme-light .filters select {
+  color-scheme: light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1.4 1.2L6 5.4l4.6-4.2' stroke='%23122033' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+select:focus,
+select.input:focus,
+.period-select:focus,
+.form-grid select:focus,
+.settings-grid select:focus,
+.modal select:focus,
+.filters select:focus {
+  border-color: rgba(61, 139, 253, 0.55);
+  box-shadow: 0 0 0 3px rgba(61, 139, 253, 0.15);
 }
 
 select option,
 select optgroup,
+select.input option,
+.period-select option,
 .form-grid select option,
+.settings-grid select option,
 .modal select option,
 .modal-body select option,
-.period-select option,
-select.input option {
-  color: var(--select-option-text);
-  background-color: var(--select-option-bg);
-}
-
-select option:checked,
-select option:focus,
-.form-grid select option:checked,
-.modal select option:checked,
-.modal-body select option:checked {
-  color: var(--select-option-text);
-  background-color: var(--select-option-checked);
-}
-
-select option:disabled,
-.form-grid select option:disabled,
-.modal select option:disabled {
-  color: var(--text-muted);
-}
-
-html[data-theme="dark"] select,
-html[data-theme="dark"] .period-select,
-html[data-theme="dark"] .form-grid select,
-html[data-theme="dark"] .modal select,
-.theme-dark select,
-.theme-dark .period-select,
-.theme-dark .form-grid select,
-.theme-dark .modal select {
-  color-scheme: dark;
+.filters select option {
+  color: CanvasText;
+  background-color: Canvas;
 }
 
 html[data-theme="dark"] select option,
 html[data-theme="dark"] select optgroup,
-html[data-theme="dark"] .period-select option,
-html[data-theme="dark"] .form-grid select option,
-html[data-theme="dark"] .modal select option,
-html[data-theme="dark"] .modal-body select option,
 .theme-dark select option,
 .theme-dark select optgroup,
-.theme-dark .period-select option,
+html[data-theme="dark"] .settings-grid select option,
+.theme-dark .settings-grid select option,
+html[data-theme="dark"] .form-grid select option,
 .theme-dark .form-grid select option,
+html[data-theme="dark"] .modal select option,
+html[data-theme="dark"] .modal-body select option,
 .theme-dark .modal select option,
 .theme-dark .modal-body select option {
-  color: var(--select-option-text);
-  background-color: var(--select-option-bg);
-}
-
-html[data-theme="light"] select,
-html[data-theme="light"] .period-select,
-html[data-theme="light"] .form-grid select,
-html[data-theme="light"] .modal select,
-.theme-light select,
-.theme-light .period-select,
-.theme-light .form-grid select,
-.theme-light .modal select {
-  color-scheme: light;
+  color: #f4f7ff;
+  background-color: #0d1b33;
 }
 
 html[data-theme="light"] select option,
 html[data-theme="light"] select optgroup,
-html[data-theme="light"] .period-select option,
-html[data-theme="light"] .form-grid select option,
-html[data-theme="light"] .modal select option,
-html[data-theme="light"] .modal-body select option,
 .theme-light select option,
 .theme-light select optgroup,
-.theme-light .period-select option,
+html[data-theme="light"] .settings-grid select option,
+.theme-light .settings-grid select option,
+html[data-theme="light"] .form-grid select option,
 .theme-light .form-grid select option,
+html[data-theme="light"] .modal select option,
+html[data-theme="light"] .modal-body select option,
 .theme-light .modal select option,
 .theme-light .modal-body select option {
-  color: var(--select-option-text);
-  background-color: var(--select-option-bg);
+  color: #122033;
+  background-color: #ffffff;
+}
+
+select option:checked,
+select option:focus {
+  color: #f4f7ff;
+  background-color: #1a3358;
+}
+
+html[data-theme="light"] select option:checked,
+html[data-theme="light"] select option:focus,
+.theme-light select option:checked,
+.theme-light select option:focus {
+  color: #122033;
+  background-color: #e8eef8;
+}
+
+select option:disabled {
+  color: var(--text-muted);
 }
 
 button {
@@ -784,6 +830,26 @@ p {
   gap: 14px;
 }
 
+.settings-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.settings-grid select {
+  width: 100%;
+  color: var(--select-text);
+  background-color: var(--select-bg);
+  color-scheme: dark;
+}
+
+html[data-theme="light"] .settings-grid select,
+.theme-light .settings-grid select {
+  color-scheme: light;
+}
+
 .envelope-card,
 .goal-card {
   padding: 18px;
@@ -1098,6 +1164,21 @@ p {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+select.input {
+  background: var(--select-bg)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1.4 1.2L6 5.4l4.6-4.2' stroke='%23f4f7ff' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    no-repeat right 12px center / 12px 8px;
+  color: var(--select-text);
+  padding-right: 36px;
+  color-scheme: dark;
+}
+
+html[data-theme="light"] select.input,
+.theme-light select.input {
+  color-scheme: light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1.4 1.2L6 5.4l4.6-4.2' stroke='%23122033' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
 .input:focus {
   border-color: rgba(61, 139, 253, 0.55);
   box-shadow: 0 0 0 3px rgba(61, 139, 253, 0.15);
@@ -1186,11 +1267,17 @@ textarea.input {
 }
 
 .period-select {
-  padding: 6px 10px;
+  padding: 6px 28px 6px 10px;
   border-radius: 10px;
   border: 1px solid var(--border);
-  background: var(--surface-soft);
-  color: var(--text-primary);
+  background-color: var(--select-bg);
+  color: var(--select-text);
+  color-scheme: dark;
+}
+
+html[data-theme="light"] .period-select,
+.theme-light .period-select {
+  color-scheme: light;
 }
 
 .panel {
@@ -1386,6 +1473,23 @@ textarea.input {
   border: 1px solid var(--border);
   background: var(--surface-soft);
   outline: none;
+}
+
+.form-grid select {
+  background-color: var(--select-bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1.4 1.2L6 5.4l4.6-4.2' stroke='%23f4f7ff' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px 8px;
+  padding-right: 36px;
+  color: var(--select-text);
+  color-scheme: dark;
+}
+
+html[data-theme="light"] .form-grid select,
+.theme-light .form-grid select {
+  color-scheme: light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1.4 1.2L6 5.4l4.6-4.2' stroke='%23122033' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
 .form-grid input:focus,
