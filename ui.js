@@ -421,16 +421,28 @@ export class UI {
     const { income, budget, expenses, credits, utilities, goals, period } = data;
     this.render(`
       <section class="hero-panel glass">
-        <div class="hero-copy">
-          <p class="brand-wordmark">Кабинет</p>
-          <div class="eyebrow">Текущий период</div>
-          <h2>${escapeHtml(period ? `${PERIOD_STATUS_LABELS[period.status] || ''} · ${period.year}-${String(period.month).padStart(2, '0')}` : '—')}</h2>
-          <p class="muted">Доходы, конверты и платежи за выбранный месяц</p>
+        <div class="hero-main">
+          <div class="hero-copy">
+            <p class="brand-wordmark">Кабинет</p>
+            <div class="eyebrow">Текущий период</div>
+            <h2>${escapeHtml(period ? `${PERIOD_STATUS_LABELS[period.status] || ''} · ${period.year}-${String(period.month).padStart(2, '0')}` : '—')}</h2>
+            <p class="muted">Домашний учёт доходов, конвертов и платежей за месяц</p>
+          </div>
+          <div class="hero-actions">
+            <button class="btn btn-primary" data-action="add-income" type="button">+ Доход</button>
+            <button class="btn btn-ghost" data-action="distribute" type="button">Распределить</button>
+            <button class="btn btn-ghost" data-action="add-expense" type="button">Покупка</button>
+          </div>
         </div>
-        <div class="hero-actions">
-          <button class="btn btn-primary" data-action="add-income" type="button">+ Доход</button>
-          <button class="btn btn-ghost" data-action="distribute" type="button">Распределить</button>
-          <button class="btn btn-ghost" data-action="add-expense" type="button">Покупка</button>
+        <div class="hero-visual" aria-hidden="true">
+          <img
+            class="hero-home-img"
+            src="assets/images/home-hero.jpg"
+            alt=""
+            width="320"
+            height="320"
+            decoding="async"
+          />
         </div>
       </section>
       ${this.stats([
