@@ -5,8 +5,7 @@ import {
   escapeHtml, formatDate, formatDateTime, formatMoney, getMonthName, PERIOD_STATUS_LABELS
 } from './utils.js';
 import { drawBars, drawDonut, drawLine, legendHtml } from './charts.js';
-import { createWarpText } from './warpText.js';
-import { createSilk, SILK_THEME } from './silk.js';
+// silk / warpText подключаются лениво — сбой WebGL не должен ронять весь UI
 
 function formatDayMonth(iso) {
   if (!iso) return '—';
@@ -123,14 +122,57 @@ export class UI {
       try { this._silk.destroy(); } catch (_) { /* ignore */ }
       this._silk = null;
     }
+
     const theme = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-    this._silk = createSilk(host, SILK_THEME[theme]);
+    import('./silk.js')
+      .then(({ createSilk, SILK_THEME }) => {
+        if (!this.root?.contains(host)) return;
+        this._silk = createSilk(host, SILK_THEME[theme] || SILK_THEME.dark);
+      })
+      .catch((error) => {
+        console.warn('Silk фон отключён:', error);
+      });
   }
 
   updateSilkTheme(theme) {
     const value = theme === 'light' ? 'light' : 'dark';
-    if (this._silk?.setTheme) this._silk.setTheme(value);
-    else this.mountSilkBackground();
+    if (this._silk?.setTheme) {
+      this._silk.setTheme(value);
+      return;
+    }
+    this.mountSilkBackground();
+  }
+
+  mountHeroWarpText() {
+    const host = this.contentEl?.querySelector('#hero-warp');
+    if (!host) return;
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light'
+      || document.body.classList.contains('theme-light');
+    this.destroyWarpText();
+    import('./warpText.js')
+      .then(({ createWarpText }) => {
+        if (!this.contentEl?.contains(host)) return;
+        this._warpText = createWarpText(host, {
+          text: 'Кабинет',
+          color: isLight ? '#14201c' : '#eef3ef',
+          warpStrength: 0.08,
+          warpScale: 1.7,
+          speed: 0.55,
+          pointerInfluence: 0.42,
+          pointerStrength: 0.38,
+          refraction: 0.018,
+          ripple: true,
+          fontSize: 'clamp(2.4rem, 5vw, 3.6rem)',
+          fontWeight: 600,
+          fontFamily: 'Fraunces, Georgia, serif',
+          letterSpacing: '-0.04em',
+          lineHeight: 0.9
+        });
+      })
+      .catch((error) => {
+        console.warn('WarpText отключён:', error);
+        host.innerHTML = '<p class="brand-wordmark warp-text-fallback">Кабинет</p>';
+      });
   }
 
   bindGlobalEvents() {
@@ -370,30 +412,6 @@ export class UI {
     }
   }
 
-  mountHeroWarpText() {
-    const host = this.contentEl?.querySelector('#hero-warp');
-    if (!host) return;
-    const isLight = document.documentElement.getAttribute('data-theme') === 'light'
-      || document.body.classList.contains('theme-light');
-    this.destroyWarpText();
-    this._warpText = createWarpText(host, {
-      text: 'Кабинет',
-      color: isLight ? '#14201c' : '#eef3ef',
-      warpStrength: 0.08,
-      warpScale: 1.7,
-      speed: 0.55,
-      pointerInfluence: 0.42,
-      pointerStrength: 0.38,
-      refraction: 0.018,
-      ripple: true,
-      fontSize: 'clamp(2.4rem, 5vw, 3.6rem)',
-      fontWeight: 600,
-      fontFamily: 'Fraunces, Georgia, serif',
-      letterSpacing: '-0.04em',
-      lineHeight: 0.9
-    });
-  }
-
   money(amount, currency = 'RUB') {
     return formatMoney(amount, currency);
   }
@@ -436,7 +454,9 @@ export class UI {
     this.render(`
       <section class="hero-panel glass">
         <div class="hero-copy">
-          <div class="warp-text" id="hero-warp" role="img" aria-label="Кабинет"></div>
+          <div class="warp-text" id="hero-warp" role="img" aria-label="Кабинет">
+            <p class="brand-wordmark warp-text-fallback">Кабинет</p>
+          </div>
           <div class="eyebrow">Текущий период</div>
           <h2>${escapeHtml(period ? `${PERIOD_STATUS_LABELS[period.status] || ''} · ${period.year}-${String(period.month).padStart(2, '0')}` : '—')}</h2>
           <p class="muted">Доходы, конверты и платежи за выбранный месяц</p>

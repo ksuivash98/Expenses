@@ -1,7 +1,7 @@
 /**
  * silk.js — фон «Silk» на Three.js (vanilla-порт React Bits Silk)
  */
-import * as THREE from 'three';
+import * as THREE from './node_modules/three/build/three.module.js';
 
 function hexToNormalizedRGB(hex) {
   const clean = String(hex || '').replace('#', '');
@@ -145,7 +145,8 @@ export function createSilk(container, options = {}) {
     vertexShader,
     fragmentShader,
     depthTest: false,
-    depthWrite: false
+    depthWrite: false,
+    glslVersion: THREE.GLSL1
   });
 
   const geometry = new THREE.PlaneGeometry(2, 2, 1, 1);

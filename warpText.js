@@ -1,7 +1,7 @@
 /**
  * warpText.js — WebGL-анимация заголовка (vanilla-порт WarpText на ogl)
  */
-import { Renderer, Program, Mesh, Triangle, Texture } from 'ogl';
+import { Renderer, Program, Mesh, Triangle, Texture } from './node_modules/ogl/src/index.js';
 
 const vertex = `#version 300 es
 in vec2 position;
@@ -299,6 +299,8 @@ export function createWarpText(container, options = {}) {
   canvas.style.height = '100%';
   canvas.style.display = 'block';
   canvas.setAttribute('aria-hidden', 'true');
+  // убираем статичный fallback, когда WebGL готов
+  container.querySelectorAll('.warp-text-fallback').forEach((el) => el.remove());
   container.appendChild(canvas);
 
   texture = new Texture(gl, {
