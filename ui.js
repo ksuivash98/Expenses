@@ -58,10 +58,10 @@ export class UI {
       <div class="app-shell">
         <aside class="sidebar glass" id="sidebar">
           <div class="brand">
-            <div class="brand-mark">₽</div>
+            <div class="brand-mark" aria-hidden="true">К</div>
             <div>
-              <strong>Финансовый кабинет</strong>
-              <span>локальное хранилище</span>
+              <strong>Кабинет</strong>
+              <span>личные финансы</span>
             </div>
           </div>
           <nav class="nav" id="nav"></nav>
@@ -375,7 +375,8 @@ export class UI {
     const { income, budget, expenses, credits, utilities, goals, period } = data;
     this.render(`
       <section class="hero-panel glass">
-        <div>
+        <div class="hero-copy">
+          <p class="brand-wordmark">Кабинет</p>
           <div class="eyebrow">Текущий период</div>
           <h2>${escapeHtml(period ? `${PERIOD_STATUS_LABELS[period.status] || ''} · ${period.year}-${String(period.month).padStart(2, '0')}` : '—')}</h2>
           <p class="muted">Доходы, конверты и платежи за выбранный месяц</p>

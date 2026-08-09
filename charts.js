@@ -1,4 +1,4 @@
-/**
+﻿/**
  * charts.js — Canvas/SVG диаграммы
  */
 import { formatMoney, hexToRgba } from './utils.js';
@@ -29,10 +29,10 @@ export function drawDonut(canvas, items, options = {}) {
     ctx.lineWidth = thickness;
     ctx.stroke();
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.font = '600 14px Manrope, sans-serif';
+    ctx.font = '600 14px Source Sans 3, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('Нет данных', cx, cy);
+    ctx.fillText('РќРµС‚ РґР°РЅРЅС‹С…', cx, cy);
     return;
   }
 
@@ -56,13 +56,13 @@ export function drawDonut(canvas, items, options = {}) {
   ctx.fill();
 
   ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim() || '#fff';
-  ctx.font = '700 15px Sora, sans-serif';
+  ctx.font = '700 15px Fraunces, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(formatMoney(total), cx, cy - 8);
   ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#aaa';
-  ctx.font = '500 12px Manrope, sans-serif';
-  ctx.fillText(options.centerLabel || 'Всего', cx, cy + 12);
+  ctx.font = '500 12px Source Sans 3, sans-serif';
+  ctx.fillText(options.centerLabel || 'Р’СЃРµРіРѕ', cx, cy + 12);
 }
 
 export function drawBars(canvas, items, options = {}) {
@@ -81,9 +81,9 @@ export function drawBars(canvas, items, options = {}) {
   const data = items || [];
   if (!data.length) {
     ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.font = '500 13px Manrope, sans-serif';
+    ctx.font = '500 13px Source Sans 3, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('Нет данных', width / 2, height / 2);
+    ctx.fillText('РќРµС‚ РґР°РЅРЅС‹С…', width / 2, height / 2);
     return;
   }
 
@@ -97,7 +97,7 @@ export function drawBars(canvas, items, options = {}) {
     const h = (value / max) * (height - 50);
     const x = gap + index * (barWidth + gap);
     const y = baseY - h;
-    const color = item.color || '#3d8bfd';
+    const color = item.color || '#3cb88a';
     const gradient = ctx.createLinearGradient(0, y, 0, baseY);
     gradient.addColorStop(0, color);
     gradient.addColorStop(1, hexToRgba(color, 0.35));
@@ -110,7 +110,7 @@ export function drawBars(canvas, items, options = {}) {
     }
     ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.font = '500 10px Manrope, sans-serif';
+    ctx.font = '500 10px Source Sans 3, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(String(item.label || '').slice(0, 8), x + barWidth / 2, height - 10);
   });
@@ -132,9 +132,9 @@ export function drawLine(canvas, items, options = {}) {
   const data = items || [];
   if (data.length < 2) {
     ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.font = '500 13px Manrope, sans-serif';
+    ctx.font = '500 13px Source Sans 3, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('Недостаточно данных', width / 2, height / 2);
+    ctx.fillText('РќРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ РґР°РЅРЅС‹С…', width / 2, height / 2);
     return;
   }
 
@@ -152,7 +152,7 @@ export function drawLine(canvas, items, options = {}) {
     if (index === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   });
-  ctx.strokeStyle = options.color || '#3d8bfd';
+  ctx.strokeStyle = options.color || '#3cb88a';
   ctx.lineWidth = 2.5;
   ctx.stroke();
 
@@ -162,11 +162,11 @@ export function drawLine(canvas, items, options = {}) {
     const y = 16 + (1 - (value - min) / (max - min || 1)) * chartH;
     ctx.beginPath();
     ctx.arc(x, y, 3.5, 0, Math.PI * 2);
-    ctx.fillStyle = options.color || '#3d8bfd';
+    ctx.fillStyle = options.color || '#3cb88a';
     ctx.fill();
     if (index === 0 || index === data.length - 1 || index % Math.ceil(data.length / 4) === 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
-      ctx.font = '500 10px Manrope, sans-serif';
+      ctx.font = '500 10px Source Sans 3, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(String(item.label || '').slice(0, 6), x, height - 8);
     }
@@ -176,9 +176,10 @@ export function drawLine(canvas, items, options = {}) {
 export function legendHtml(items) {
   return (items || []).map((item) => `
     <div class="legend-item">
-      <span class="legend-dot" style="background:${item.color || '#3d8bfd'}"></span>
-      <span>${item.name || item.label || item.category || item.source || '—'}</span>
+      <span class="legend-dot" style="background:${item.color || '#3cb88a'}"></span>
+      <span>${item.name || item.label || item.category || item.source || 'вЂ”'}</span>
       <strong>${formatMoney(item.amount || 0)}</strong>
     </div>
   `).join('');
 }
+
