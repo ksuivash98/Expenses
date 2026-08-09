@@ -91,6 +91,7 @@ class App {
     });
     this.ui.on('settings-theme', (theme) => {
       settingsService.setTheme(theme);
+      this.ui.updateSilkTheme(theme);
       this.ui.toast('Тема обновлена', 'success');
     });
     this.ui.on('settings-currency', (currency) => {

@@ -273,18 +273,33 @@ p {
   inset: 0;
   z-index: -1;
   pointer-events: none;
+  overflow: hidden;
   background:
-    radial-gradient(ellipse 70% 45% at 8% -5%, rgba(60, 184, 138, 0.2), transparent 55%),
-    radial-gradient(ellipse 55% 40% at 92% 8%, rgba(201, 163, 106, 0.12), transparent 50%),
-    radial-gradient(ellipse 45% 35% at 70% 95%, rgba(47, 120, 90, 0.14), transparent 55%),
+    radial-gradient(ellipse 70% 45% at 8% -5%, rgba(60, 184, 138, 0.12), transparent 55%),
+    radial-gradient(ellipse 55% 40% at 92% 8%, rgba(201, 163, 106, 0.08), transparent 50%),
     linear-gradient(165deg, var(--bg-1), var(--bg-2) 48%, var(--bg-3));
+}
+
+.silk-host {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.silk-host canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .app-bg::after {
   content: '';
   position: absolute;
   inset: 0;
-  opacity: 0.35;
+  z-index: 1;
+  opacity: 0.28;
   background-image:
     repeating-linear-gradient(
       -12deg,
@@ -301,13 +316,17 @@ p {
 
 [data-theme="light"] .app-bg {
   background:
-    radial-gradient(ellipse 65% 45% at 0% 0%, rgba(31, 122, 88, 0.14), transparent 55%),
-    radial-gradient(ellipse 50% 40% at 100% 0%, rgba(154, 115, 64, 0.1), transparent 50%),
+    radial-gradient(ellipse 65% 45% at 0% 0%, rgba(31, 122, 88, 0.1), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 100% 0%, rgba(154, 115, 64, 0.08), transparent 50%),
     linear-gradient(165deg, var(--bg-1), var(--bg-2));
 }
 
+[data-theme="light"] .silk-host {
+  opacity: 0.55;
+}
+
 [data-theme="light"] .app-bg::after {
-  opacity: 0.22;
+  opacity: 0.18;
   mix-blend-mode: multiply;
 }
 

@@ -6,6 +6,7 @@ import {
 } from './utils.js';
 import { drawBars, drawDonut, drawLine, legendHtml } from './charts.js';
 import { createWarpText } from './warpText.js';
+import { createSilk, SILK_THEME } from './silk.js';
 
 function formatDayMonth(iso) {
   if (!iso) return '—';
@@ -39,6 +40,7 @@ export class UI {
     this.lastModalFormData = {};
     this._delegated = false;
     this._warpText = null;
+    this._silk = null;
   }
 
   on(event, handler) {
@@ -56,7 +58,9 @@ export class UI {
 
   mount() {
     this.root.innerHTML = `
-      <div class="app-bg" aria-hidden="true"></div>
+      <div class="app-bg" aria-hidden="true">
+        <div class="silk-host" id="silk-bg"></div>
+      </div>
       <div class="app-shell">
         <aside class="sidebar glass" id="sidebar">
           <div class="brand">
@@ -109,6 +113,24 @@ export class UI {
     `).join('');
 
     this.bindGlobalEvents();
+    this.mountSilkBackground();
+  }
+
+  mountSilkBackground() {
+    const host = this.root.querySelector('#silk-bg');
+    if (!host) return;
+    if (this._silk) {
+      try { this._silk.destroy(); } catch (_) { /* ignore */ }
+      this._silk = null;
+    }
+    const theme = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    this._silk = createSilk(host, SILK_THEME[theme]);
+  }
+
+  updateSilkTheme(theme) {
+    const value = theme === 'light' ? 'light' : 'dark';
+    if (this._silk?.setTheme) this._silk.setTheme(value);
+    else this.mountSilkBackground();
   }
 
   bindGlobalEvents() {
