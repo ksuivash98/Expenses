@@ -797,6 +797,42 @@ p {
   margin-bottom: 18px;
 }
 
+.stat-card--clickable {
+  cursor: pointer;
+}
+
+.stat-body {
+  min-width: 0;
+}
+
+.stat-hint {
+  margin: 6px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
+.checkbox-field {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+.checkbox-field input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.req-status {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
 .stats-grid.compact {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }

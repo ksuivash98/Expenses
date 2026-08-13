@@ -133,6 +133,78 @@ export class CreditsService {
     );
   }
 
+  /**
+   * Есть ли платёж по кредиту в указанном периоде (по дате YYYY-MM).
+   */
+  isPaidInPeriod(creditId, period = storage.getCurrentPeriod()) {
+    if (!period) return false;
+    const ym = `${period.year}-${String(period.month).padStart(2, '0')}`;
+    return this.getPayments(creditId).some((p) => String(p.date || '').startsWith(ym));
+  }
+
+  dueDateForPeriod(credit, period = storage.getCurrentPeriod()) {
+    if (!credit || !period) return null;
+    const maxDay = daysInMonth(period.year, period.month - 1);
+    const day = Math.min(Math.max(1, Number(credit.payment_day) || 1), maxDay);
+    return `${period.year}-${String(period.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+
+  /**
+   * Сумма ежемесячных платежей активных кредитов, ещё НЕ оплаченных в текущем периоде.
+   */
+  getMonthlyRemaining(period = storage.getCurrentPeriod()) {
+    return roundMoney(sumBy(
+      this.getActive().filter((c) => !this.isPaidInPeriod(c.id, period)),
+      (c) => safeNum(c.monthly_payment)
+    ));
+  }
+
+  getMonthlyOverdue(period = storage.getCurrentPeriod()) {
+    const today = todayISO();
+    return roundMoney(sumBy(
+      this.getActive().filter((c) => {
+        if (this.isPaidInPeriod(c.id, period)) return false;
+        const due = this.dueDateForPeriod(c, period);
+        return due && due < today;
+      }),
+      (c) => safeNum(c.monthly_payment)
+    ));
+  }
+
+  getMonthlyDueToday(period = storage.getCurrentPeriod()) {
+    const today = todayISO();
+    return roundMoney(sumBy(
+      this.getActive().filter((c) => {
+        if (this.isPaidInPeriod(c.id, period)) return false;
+        return this.dueDateForPeriod(c, period) === today;
+      }),
+      (c) => safeNum(c.monthly_payment)
+    ));
+  }
+
+  getObligationCard(period = storage.getCurrentPeriod()) {
+    const remaining = this.getMonthlyRemaining(period);
+    const overdue = this.getMonthlyOverdue(period);
+    const today = this.getMonthlyDueToday(period);
+    let status = 'paid';
+    let statusLabel = '✓ Всё оплачено';
+    let tone = 'green';
+    if (overdue > 0) {
+      status = 'overdue';
+      statusLabel = `🔴 Просрочено`;
+      tone = 'red';
+    } else if (today > 0) {
+      status = 'today';
+      statusLabel = '🟠 Сегодня';
+      tone = 'orange';
+    } else if (remaining > 0) {
+      status = 'pending';
+      statusLabel = '🟡 Осталось оплатить';
+      tone = 'yellow';
+    }
+    return { remaining, overdue, today, status, statusLabel, tone };
+  }
+
   getTotalDebt() {
     return sumBy(this.getActive(), (c) => safeNum(c.current_balance));
   }
@@ -548,6 +620,8 @@ export class CreditsService {
     const closed = enriched.filter((c) => c.status !== 'active');
     const totalDebt = roundMoney(sumBy(active, (c) => c.current_balance));
     const monthly = roundMoney(sumBy(active, (c) => c.monthly_payment));
+    const monthlyRemaining = this.getMonthlyRemaining();
+    const obligation = this.getObligationCard();
     const totalInitial = roundMoney(sumBy(enriched, (c) => c.initial_amount));
     const totalPaid = roundMoney(sumBy(enriched, (c) => c.paid));
     const totalOverpayment = roundMoney(sumBy(enriched, (c) => c.overpayment));
@@ -587,6 +661,8 @@ export class CreditsService {
     return {
       totalDebt,
       monthly,
+      monthlyRemaining,
+      obligation,
       count: active.length,
       closedCount: closed.length,
       totalCount: enriched.length,

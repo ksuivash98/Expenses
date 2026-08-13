@@ -71,6 +71,34 @@ export class UtilitiesService {
     return this.getPending().filter((u) => u.due_date && String(u.due_date) < today);
   }
 
+  getDueToday() {
+    const today = todayISO();
+    return this.getPending().filter((u) => u.due_date && String(u.due_date) === today);
+  }
+
+  getObligationCard() {
+    const remaining = this.getTotalPending();
+    const overdue = roundMoney(sumBy(this.getOverdue(), (u) => Number(u.amount) || 0));
+    const today = roundMoney(sumBy(this.getDueToday(), (u) => Number(u.amount) || 0));
+    let status = 'paid';
+    let statusLabel = '✓ Всё оплачено';
+    let tone = 'green';
+    if (overdue > 0) {
+      status = 'overdue';
+      statusLabel = '🔴 Просрочено';
+      tone = 'red';
+    } else if (today > 0) {
+      status = 'today';
+      statusLabel = '🟠 Сегодня';
+      tone = 'orange';
+    } else if (remaining > 0) {
+      status = 'pending';
+      statusLabel = '🟡 Осталось оплатить';
+      tone = 'yellow';
+    }
+    return { remaining, overdue, today, status, statusLabel, tone };
+  }
+
   getAnalytics() {
     const items = this.getAll();
     const pending = this.getPending();
@@ -114,6 +142,7 @@ export class UtilitiesService {
       totalCount: items.length,
       overdueCount: overdue.length,
       overdueTotal,
+      card: this.getObligationCard(),
       avgAmount,
       progress: percent(paidTotal, total),
       topService: top ? top.service : null,

@@ -7,6 +7,7 @@ import { budgetService } from './budget.js';
 import { expensesService } from './expenses.js';
 import { creditsService } from './credits.js';
 import { utilitiesService } from './utilities.js';
+import { requiredExpensesService } from './requiredExpenses.js';
 import { goalsService } from './goals.js';
 import { analyticsService } from './analytics.js';
 import { calendarService } from './calendar.js';
@@ -147,6 +148,13 @@ class App {
       case 'utilities':
         this.ui.renderUtilities(utilitiesService.getAll(), utilitiesService.getAnalytics(), c);
         break;
+      case 'required':
+        this.ui.renderRequiredExpenses(
+          requiredExpensesService.getPeriodItems(),
+          requiredExpensesService.getAnalytics(),
+          c
+        );
+        break;
       case 'goals':
         this.ui.renderGoals(goalsService.getSummary(), c);
         break;
@@ -248,10 +256,24 @@ class App {
           creditsService.setViewPreferences({ tab: 'list' });
           this.navigate('credits');
           break;
+        case 'goto-utilities':
+          this.navigate('utilities');
+          break;
+        case 'goto-required':
+          this.navigate('required');
+          break;
+        case 'goto-expenses':
+          this.navigate('expenses');
+          break;
         case 'add-utility': return this.formUtility();
         case 'edit-utility': return this.formUtility(id);
         case 'pay-utility': return this.payUtility(id);
         case 'delete-utility': return this.deleteUtility(id);
+        case 'add-required': return this.formRequired();
+        case 'edit-required': return this.formRequired(id);
+        case 'pay-required': return this.payRequired(id);
+        case 'unpay-required': return this.unpayRequired(id);
+        case 'delete-required': return this.deleteRequired(id);
         case 'add-goal': return this.formGoal();
         case 'contribute-goal': return this.contributeGoal(id);
         case 'delete-goal': return this.deleteGoal(id);
@@ -897,6 +919,130 @@ class App {
   async deleteUtility(id) {
     if (!(await this.ui.confirm('Удалить услугу?', { danger: true }))) return;
     const result = utilitiesService.remove(id);
+    this.ui.toast(result.message || (result.success ? 'Удалено' : 'Ошибка'), result.success ? 'success' : 'error');
+    if (result.success) this.refresh();
+  }
+
+  async formRequired(id = null) {
+    const existing = id ? requiredExpensesService.getById(id) : null;
+    if (id && !existing) {
+      this.ui.toast('Запись не найдена', 'error');
+      return;
+    }
+
+    const categories = [...requiredExpensesService.getCategories()];
+    if (existing?.category && !categories.includes(existing.category)) {
+      categories.unshift(existing.category);
+    }
+
+    await this.formDialog(existing ? 'Изменить обязательный расход' : 'Обязательный расход', [
+      { name: 'title', label: 'Название', value: existing?.title || '', required: true },
+      {
+        name: 'category',
+        label: 'Категория',
+        type: 'select',
+        options: categories,
+        value: existing?.category || categories[0],
+        required: true
+      },
+      {
+        name: 'custom_category',
+        label: 'Своя категория (если нужно)',
+        value: ''
+      },
+      {
+        name: 'amount',
+        label: 'Сумма',
+        type: 'number',
+        step: '0.01',
+        value: existing?.amount ?? '',
+        required: true
+      },
+      {
+        name: 'payment_day',
+        label: 'День платежа (1–31)',
+        type: 'number',
+        min: 1,
+        max: 31,
+        value: existing?.payment_day ?? 10,
+        required: true
+      },
+      {
+        name: 'recurring',
+        label: 'Повторять каждый месяц',
+        type: 'checkbox',
+        value: existing ? existing.recurring !== false : true
+      },
+      {
+        name: 'active',
+        label: 'Активен',
+        type: 'checkbox',
+        value: existing ? existing.active !== false : true
+      },
+      {
+        name: 'comment',
+        label: 'Комментарий',
+        type: 'textarea',
+        value: existing?.comment || ''
+      }
+    ], (data) => {
+      const payload = {
+        ...data,
+        category: String(data.custom_category || '').trim() || data.category
+      };
+      const result = existing
+        ? requiredExpensesService.update(id, payload)
+        : requiredExpensesService.add(payload);
+      this.ui.toast(
+        result.message || (result.success ? (existing ? 'Сохранено' : 'Добавлено') : 'Ошибка'),
+        result.success ? 'success' : 'error'
+      );
+      if (result.success) this.refresh();
+      return result;
+    });
+  }
+
+  async payRequired(id) {
+    const item = requiredExpensesService.getById(id);
+    if (!item) {
+      this.ui.toast('Запись не найдена', 'error');
+      return;
+    }
+    await this.formDialog(`Оплата: ${item.title}`, [
+      {
+        name: 'amount',
+        label: 'Сумма',
+        type: 'number',
+        step: '0.01',
+        value: item.amount,
+        required: true
+      },
+      {
+        name: 'budget_category',
+        label: 'Конверт',
+        type: 'select',
+        options: this.envelopeOptions(),
+        required: true
+      },
+      { name: 'date', label: 'Дата оплаты', type: 'date', value: todayISO(), required: true }
+    ], (data) => {
+      const result = requiredExpensesService.pay(id, data.budget_category, data.date, data.amount);
+      this.ui.toast(result.message || (result.success ? 'Оплачено' : 'Ошибка'), result.success ? 'success' : 'error');
+      if (result.success) this.refresh();
+      return result;
+    });
+  }
+
+  async unpayRequired(id) {
+    if (!(await this.ui.confirm('Отменить оплату за этот месяц? Средства вернутся в конверт.'))) return;
+    const result = requiredExpensesService.unpay(id);
+    this.ui.toast(result.message || (result.success ? 'Оплата отменена' : 'Ошибка'), result.success ? 'success' : 'error');
+    if (result.success) this.refresh();
+  }
+
+  async deleteRequired(id) {
+    if (!(await this.ui.confirm('Удалить обязательный расход?', { danger: true }))) return;
+    const result = requiredExpensesService.remove(id);
     this.ui.toast(result.message || (result.success ? 'Удалено' : 'Ошибка'), result.success ? 'success' : 'error');
     if (result.success) this.refresh();
   }

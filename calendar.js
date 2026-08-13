@@ -3,6 +3,7 @@
  */
 import { creditsService } from './credits.js';
 import { utilitiesService } from './utilities.js';
+import { requiredExpensesService } from './requiredExpenses.js';
 import { goalsService } from './goals.js';
 import { storage } from './storage.js';
 import {
@@ -55,6 +56,21 @@ export class CalendarService {
           amount: Number(util.amount) || 0,
           type: 'utility',
           icon: '🏠'
+        });
+      }
+    });
+
+    requiredExpensesService.getPending().forEach((item) => {
+      if (!item.due_date) return;
+      const d = new Date(item.due_date);
+      if (d.getFullYear() === year && d.getMonth() === monthIndex) {
+        events.push({
+          id: `req-${item.id}`,
+          date: item.due_date,
+          title: item.title,
+          amount: Number(item.amount) || 0,
+          type: 'required',
+          icon: '📌'
         });
       }
     });

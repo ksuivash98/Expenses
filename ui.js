@@ -22,6 +22,7 @@ const NAV = [
   { id: 'expenses', icon: '🛒', title: 'Расходы' },
   { id: 'credits', icon: '💳', title: 'Кредиты' },
   { id: 'utilities', icon: '🏠', title: 'КУслуги' },
+  { id: 'required', icon: '📌', title: 'Обязательные' },
   { id: 'goals', icon: '🎯', title: 'Цели' },
   { id: 'calendar', icon: '📅', title: 'Календарь' },
   { id: 'analytics', icon: '📊', title: 'Аналитика' },
@@ -345,9 +346,15 @@ export class UI {
   closeModal(result) {
     if (!this.modalRoot) return;
     const form = this.modalRoot.querySelector('form');
-    this.lastModalFormData = form
-      ? Object.fromEntries(new FormData(form).entries())
-      : {};
+    if (form) {
+      const data = Object.fromEntries(new FormData(form).entries());
+      form.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+        data[cb.name] = cb.checked;
+      });
+      this.lastModalFormData = data;
+    } else {
+      this.lastModalFormData = {};
+    }
     this.modalRoot.classList.remove('is-open');
     this.modalRoot.hidden = true;
     this.modalRoot.innerHTML = '';
@@ -390,14 +397,32 @@ export class UI {
 
   stats(cards) {
     return `<div class="stats-grid">${cards.map((c) => `
-      <article class="stat-card glass tone-${c.tone || 'blue'}">
+      <article class="stat-card glass tone-${c.tone || 'blue'}${c.clickAction ? ' stat-card--clickable' : ''}"${c.clickAction ? ` data-action="${escapeHtml(c.clickAction)}" role="button" tabindex="0"` : ''}>
         <div class="stat-icon">${c.icon || '•'}</div>
-        <div>
+        <div class="stat-body">
           <p class="stat-label">${escapeHtml(c.label)}</p>
           <p class="stat-value" data-raw-value="0">${escapeHtml(c.value)}</p>
+          ${c.hint ? `<p class="stat-hint">${escapeHtml(c.hint)}</p>` : ''}
         </div>
       </article>
     `).join('')}</div>`;
+  }
+
+  /**
+   * Подпись статуса обязательств для карточки Dashboard.
+   */
+  obligationHint(card, currency) {
+    if (!card) return '✓ Всё оплачено';
+    if (card.status === 'overdue') {
+      return `🔴 Просрочено: ${formatMoney(card.overdue || 0, currency)}`;
+    }
+    if (card.status === 'today') {
+      return `🟠 Сегодня: ${formatMoney(card.today || 0, currency)}`;
+    }
+    if ((card.remaining || 0) > 0) {
+      return `🟡 Осталось оплатить: ${formatMoney(card.remaining || 0, currency)}`;
+    }
+    return '✓ Всё оплачено';
   }
 
   toolbar(title, subtitle, buttons = []) {
@@ -418,7 +443,28 @@ export class UI {
   }
 
   renderDashboard(data, currency) {
-    const { income, budget, expenses, credits, utilities, goals, period } = data;
+    const {
+      income, budget, expenses, credits, utilities, requiredExpenses, goals, period, remainingMoney
+    } = data;
+    const creditCard = credits.obligation || {
+      remaining: credits.monthlyRemaining ?? 0,
+      status: (credits.monthlyRemaining ?? 0) > 0 ? 'pending' : 'paid',
+      overdue: 0,
+      today: 0
+    };
+    const utilCard = utilities.card || {
+      remaining: utilities.pending || 0,
+      status: (utilities.pending || 0) > 0 ? 'pending' : 'paid',
+      overdue: utilities.overdueTotal || 0,
+      today: 0
+    };
+    const reqCard = requiredExpenses?.card || {
+      remaining: requiredExpenses?.pending || 0,
+      status: (requiredExpenses?.pending || 0) > 0 ? 'pending' : 'paid',
+      overdue: requiredExpenses?.overdueTotal || 0,
+      today: requiredExpenses?.todayTotal || 0
+    };
+
     this.render(`
       <section class="hero-panel glass">
         <div class="hero-main">
@@ -446,12 +492,52 @@ export class UI {
         </div>
       </section>
       ${this.stats([
-        { icon: '💰', label: 'Доходы', value: formatMoney(income.totalIncome, currency), tone: 'green' },
-        { icon: '🆓', label: 'Свободные деньги', value: formatMoney(income.freeMoney, currency), tone: 'cyan' },
-        { icon: '📦', label: 'В конвертах', value: formatMoney(budget.totalBalance, currency), tone: 'blue' },
-        { icon: '🛒', label: 'Расходы', value: formatMoney(expenses.total, currency), tone: 'orange' },
-        { icon: '💳', label: 'Долги', value: formatMoney(credits.totalDebt, currency), tone: 'red' },
-        { icon: '🏦', label: 'Накопления', value: formatMoney(budget.savings, currency), tone: 'mint' }
+        {
+          icon: '💰',
+          label: 'Доходы',
+          value: formatMoney(income.totalIncome, currency),
+          hint: income.count ? `${income.count} источник(а/ов)` : 'Нет доходов',
+          tone: 'green'
+        },
+        {
+          icon: '💵',
+          label: 'Осталось денег',
+          value: formatMoney(remainingMoney ?? ((income.freeMoney || 0) + (budget.totalBalance || 0)), currency),
+          hint: `Свободно ${formatMoney(income.freeMoney, currency)} · в конвертах ${formatMoney(budget.totalBalance, currency)}`,
+          tone: 'cyan'
+        },
+        {
+          icon: '🛒',
+          label: 'Расходы',
+          value: formatMoney(expenses.total, currency),
+          hint: 'Только проведённые операции',
+          tone: 'orange',
+          clickAction: 'goto-expenses'
+        },
+        {
+          icon: '💳',
+          label: 'Кредиты',
+          value: formatMoney(creditCard.remaining || 0, currency),
+          hint: this.obligationHint(creditCard, currency),
+          tone: creditCard.tone || (creditCard.remaining > 0 ? 'yellow' : 'green'),
+          clickAction: 'goto-credits'
+        },
+        {
+          icon: '🏠',
+          label: 'Коммунальные услуги',
+          value: formatMoney(utilCard.remaining || 0, currency),
+          hint: this.obligationHint(utilCard, currency),
+          tone: utilCard.tone || (utilCard.remaining > 0 ? 'yellow' : 'green'),
+          clickAction: 'goto-utilities'
+        },
+        {
+          icon: '📌',
+          label: 'Обязательные расходы',
+          value: formatMoney(reqCard.remaining || 0, currency),
+          hint: this.obligationHint(reqCard, currency),
+          tone: reqCard.tone || (reqCard.remaining > 0 ? 'yellow' : 'green'),
+          clickAction: 'goto-required'
+        }
       ])}
       <div class="two-col">
         <section class="panel glass">
@@ -467,17 +553,15 @@ export class UI {
           </div>
         </section>
         <section class="panel glass">
-          <div class="panel-head"><h3>Структура расходов</h3></div>
-          <canvas id="chart-expenses" width="220" height="220"></canvas>
-          <div class="legend" id="legend-expenses"></div>
-          <div class="panel-head" style="margin-top:16px"><h3>Цели</h3></div>
-          ${goals.items.slice(0, 3).map((g) => `
+          <div class="panel-head"><h3>Цели</h3></div>
+          ${goals.items.slice(0, 4).map((g) => `
             <div class="progress-row">
               <div class="progress-meta"><span>${g.icon} ${escapeHtml(g.title)}</span><span>${g.progress}%</span></div>
               <div class="progress-bar"><i style="width:${g.progress}%"></i></div>
             </div>
           `).join('') || this.empty('Целей пока нет')}
-          <p class="muted" style="margin-top:12px">КУслуги к оплате: ${formatMoney(utilities.pending, currency)}</p>
+          <div class="panel-head" style="margin-top:16px"><h3>Накопления</h3></div>
+          <p class="stat-value" style="margin:0">${formatMoney(budget.savings, currency)}</p>
         </section>
       </div>
       <section class="panel glass" style="margin-top:14px">
@@ -494,7 +578,7 @@ export class UI {
               </div>
             `).join('')}
           </div>
-          <p class="muted" style="margin-top:8px">Итого: ${budget.distributionPercentSum ?? 0}%</p>
+          <p class="muted" style="margin-top:8px">Итого: ${budget.distributionPercentSum ?? 0}% · распределение от полного дохода</p>
         ` : this.empty('Нет конвертов')}
       </section>
       <section class="panel glass" style="margin-top:14px">
@@ -515,14 +599,6 @@ export class UI {
         ` : this.empty('Нет ближайших платежей')}
       </section>
     `);
-    const expenseItems = expenses.structure.map((s, i) => ({
-      name: s.category,
-      amount: s.amount,
-      color: `hsl(${(i * 47) % 360} 70% 55%)`
-    }));
-    drawDonut(this.contentEl.querySelector('#chart-expenses'), expenseItems, { centerLabel: 'Расходы' });
-    const legend = this.contentEl.querySelector('#legend-expenses');
-    if (legend) legend.innerHTML = legendHtml(expenseItems);
   }
 
   renderIncome(list, summary, currency) {
@@ -606,10 +682,33 @@ export class UI {
   }
 
   renderExpenses(list, summary, currency) {
+    const structure = summary.structure || [];
     this.render(`
       ${this.toolbar('Расходы', `Потрачено ${formatMoney(summary.total, currency)}`, [
         '<button class="btn btn-primary" data-action="add-expense" type="button">+ Покупка</button>'
       ])}
+      ${this.stats([
+        { icon: '🛒', label: 'Всего расходов', value: formatMoney(summary.total, currency), tone: 'orange' },
+        { icon: '#️⃣', label: 'Операций', value: String(summary.count || 0), tone: 'blue' },
+        { icon: '🏷', label: 'Категорий', value: String(structure.length), tone: 'cyan' }
+      ])}
+      ${structure.length ? `
+        <div class="two-col" style="margin-bottom:14px">
+          <section class="panel glass">
+            <div class="panel-head"><h3>Структура расходов</h3></div>
+            <canvas id="chart-expenses-page" width="220" height="220"></canvas>
+            <div class="legend" id="legend-expenses-page"></div>
+          </section>
+          <section class="panel glass">
+            <div class="panel-head"><h3>По категориям</h3></div>
+            ${structure.map((s) => `
+              <div class="progress-row">
+                <div class="progress-meta"><span>${escapeHtml(s.category)}</span><span>${formatMoney(s.amount, currency)}</span></div>
+              </div>
+            `).join('')}
+          </section>
+        </div>
+      ` : ''}
       ${this.list(list.map((item) => `
         <article class="list-item glass-soft">
           <div class="list-main">
@@ -623,6 +722,16 @@ export class UI {
         </article>
       `))}
     `);
+    if (structure.length) {
+      const expenseItems = structure.map((s, i) => ({
+        name: s.category,
+        amount: s.amount,
+        color: `hsl(${(i * 47) % 360} 70% 55%)`
+      }));
+      drawDonut(this.contentEl.querySelector('#chart-expenses-page'), expenseItems, { centerLabel: 'Расходы' });
+      const legend = this.contentEl.querySelector('#legend-expenses-page');
+      if (legend) legend.innerHTML = legendHtml(expenseItems);
+    }
   }
 
   renderCredits(summary, currency) {
@@ -949,6 +1058,80 @@ export class UI {
     }
   }
 
+  renderRequiredExpenses(list, summary, currency) {
+    const analytics = summary || {};
+    const statusText = (item) => {
+      if (item.status === 'paid') return '🟢 Оплачено';
+      if (item.payStatus === 'overdue') return '🔴 Просрочено';
+      if (item.payStatus === 'today') return '🟠 Сегодня';
+      return '🔴 Не оплачено';
+    };
+    this.render(`
+      ${this.toolbar('Обязательные расходы', `К оплате ${formatMoney(analytics.pending || 0, currency)}`, [
+        '<button class="btn btn-primary" data-action="add-required" type="button">+ Добавить обязательный расход</button>'
+      ])}
+      ${this.stats([
+        { icon: '📌', label: 'Всего за месяц', value: formatMoney(analytics.total || 0, currency), tone: 'blue' },
+        { icon: '⏳', label: 'К оплате', value: formatMoney(analytics.pending || 0, currency), tone: 'orange' },
+        { icon: '✔', label: 'Оплачено', value: formatMoney(analytics.paid || 0, currency), tone: 'green' },
+        { icon: '⚠', label: 'Просрочено', value: formatMoney(analytics.overdueTotal || 0, currency), tone: 'red' }
+      ])}
+      ${(analytics.totalCount || 0) > 0 ? `
+        <div class="two-col" style="margin-bottom:14px">
+          <section class="panel glass">
+            <div class="panel-head"><h3>Структура по категориям</h3></div>
+            <canvas id="required-donut" width="220" height="220"></canvas>
+            <div class="legend" id="required-donut-legend"></div>
+          </section>
+          <section class="panel glass">
+            <div class="panel-head"><h3>Статус оплаты</h3></div>
+            <canvas id="required-bars" height="180"></canvas>
+            <div class="progress-row" style="margin-top:12px">
+              <div class="progress-meta"><span>Оплачено</span><span>${analytics.progress || 0}%</span></div>
+              <div class="progress-bar"><i style="width:${analytics.progress || 0}%"></i></div>
+            </div>
+            ${analytics.nearestTitle ? `
+              <p class="muted" style="margin-top:10px">
+                Ближайший: <strong>${escapeHtml(analytics.nearestTitle)}</strong>
+                · до ${formatDate(analytics.nearestDue)}
+                · ${formatMoney(analytics.nearestAmount || 0, currency)}
+              </p>
+            ` : ''}
+          </section>
+        </div>
+      ` : ''}
+      ${this.list(list.map((item) => `
+        <article class="list-item glass-soft ${item.payStatus === 'overdue' ? 'utility-overdue' : ''}">
+          <div class="list-main">
+            <strong>${escapeHtml(item.title)}</strong>
+            <span class="muted">${escapeHtml(item.category)} · день ${item.payment_day} · ${formatDate(item.due_date)}${item.recurring ? ' · каждый месяц' : ''}${item.comment ? ` · ${escapeHtml(item.comment)}` : ''}</span>
+            <span class="req-status">${statusText(item)}</span>
+          </div>
+          <div class="list-side">
+            <strong>${formatMoney(item.amount, currency)}</strong>
+            <div class="btn-row wrap">
+              ${item.status !== 'paid' ? `
+                <button class="btn btn-primary btn-sm" data-action="pay-required" data-id="${item.id}" type="button">Оплатить</button>
+                <button class="btn btn-ghost btn-sm" data-action="edit-required" data-id="${item.id}" type="button">Изменить</button>
+                <button class="btn btn-danger btn-sm" data-action="delete-required" data-id="${item.id}" type="button">Удалить</button>
+              ` : `
+                <span class="muted">✓ Оплачено${item.paid_date ? ` · ${formatDate(item.paid_date)}` : ''}</span>
+                <button class="btn btn-ghost btn-sm" data-action="unpay-required" data-id="${item.id}" type="button">Отменить оплату</button>
+              `}
+            </div>
+          </div>
+        </article>
+      `))}
+    `);
+
+    if ((analytics.totalCount || 0) > 0) {
+      drawDonut(this.contentEl.querySelector('#required-donut'), analytics.chartItems || [], { centerLabel: 'Обязат.' });
+      const legend = this.contentEl.querySelector('#required-donut-legend');
+      if (legend) legend.innerHTML = legendHtml(analytics.chartItems || []);
+      drawBars(this.contentEl.querySelector('#required-bars'), analytics.statusBars || []);
+    }
+  }
+
   renderGoals(summary, currency) {
     this.render(`
       ${this.toolbar('Цели', `Накоплено ${formatMoney(summary.totalSaved, currency)} из ${formatMoney(summary.totalTarget, currency)}`, [
@@ -974,7 +1157,7 @@ export class UI {
 
   renderCalendar(view, currency) {
     this.render(`
-      ${this.toolbar(view.title, 'Платежи по кредитам, КУслугам и дедлайны целей', [
+      ${this.toolbar(view.title, 'Платежи по кредитам, КУслугам, обязательным расходам и целям', [
         '<button class="btn btn-ghost" data-action="cal-prev" type="button">←</button>',
         '<button class="btn btn-ghost" data-action="cal-next" type="button">→</button>'
       ])}
@@ -1185,8 +1368,14 @@ export class UI {
           <textarea name="${f.name}" rows="3">${escapeHtml(f.value || '')}</textarea>
         </label>`;
       }
+      if (f.type === 'checkbox') {
+        return `<label class="checkbox-field full">
+          <input type="checkbox" name="${f.name}" ${f.value ? 'checked' : ''} />
+          <span>${escapeHtml(f.label)}</span>
+        </label>`;
+      }
       return `<label>${escapeHtml(f.label)}
-        <input type="${f.type || 'text'}" name="${f.name}" value="${escapeHtml(f.value ?? '')}" ${f.required ? 'required' : ''} ${f.step ? `step="${f.step}"` : ''} ${f.min != null ? `min="${f.min}"` : ''} />
+        <input type="${f.type || 'text'}" name="${f.name}" value="${escapeHtml(f.value ?? '')}" ${f.required ? 'required' : ''} ${f.step ? `step="${f.step}"` : ''} ${f.min != null ? `min="${f.min}"` : ''} ${f.max != null ? `max="${f.max}"` : ''} />
       </label>`;
     }).join('')}</form>`;
   }

@@ -66,6 +66,7 @@ function createDefaultState() {
       creditsSearch: '',
       distributionMode: 'manual',
       distributionPercents: {},
+      requiredExpenseCategories: [],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     },
@@ -96,6 +97,8 @@ function createDefaultState() {
     utilities: [],
     utilityPayments: [],
     regularPayments: [],
+    requiredExpenses: [],
+    requiredExpensePayments: [],
     goals: [],
     notifications: [{
       id: generateId(),
@@ -148,6 +151,12 @@ export class Storage {
         ...parsed,
         settings: { ...defaults.settings, ...(parsed.settings || {}) }
       };
+      // Миграция: новые коллекции не ломают старые бэкапы
+      if (!Array.isArray(this.state.requiredExpenses)) this.state.requiredExpenses = [];
+      if (!Array.isArray(this.state.requiredExpensePayments)) this.state.requiredExpensePayments = [];
+      if (!Array.isArray(this.state.settings.requiredExpenseCategories)) {
+        this.state.settings.requiredExpenseCategories = [];
+      }
       if (!this.state.currentPeriodId && this.state.financialPeriods?.length) {
         const current = this.state.financialPeriods.find((p) => p.status === 'current')
           || this.state.financialPeriods[0];
@@ -267,7 +276,7 @@ export class Storage {
     };
 
     const periodScoped = ![
-      'financialPeriods', 'periodReports', 'settings'
+      'financialPeriods', 'periodReports', 'settings', 'requiredExpenses'
     ].includes(collection);
 
     if (periodScoped && !skipPeriod && !record.period_id) {
@@ -324,7 +333,7 @@ export class Storage {
       add: (collection, item, options) => {
         const now = new Date().toISOString();
         let record = { id: item.id || generateId(), created_at: now, updated_at: now, ...item };
-        const periodScoped = !['financialPeriods', 'periodReports', 'settings'].includes(collection);
+        const periodScoped = !['financialPeriods', 'periodReports', 'settings', 'requiredExpenses'].includes(collection);
         if (periodScoped && !options?.skipPeriod && !record.period_id) {
           record = { ...record, ...this.getPeriodMeta() };
         }
@@ -371,6 +380,11 @@ export class Storage {
         ...data,
         settings: { ...defaults.settings, ...(data.settings || {}) }
       };
+      if (!Array.isArray(this.state.requiredExpenses)) this.state.requiredExpenses = [];
+      if (!Array.isArray(this.state.requiredExpensePayments)) this.state.requiredExpensePayments = [];
+      if (!Array.isArray(this.state.settings.requiredExpenseCategories)) {
+        this.state.settings.requiredExpenseCategories = [];
+      }
       if (!this.state.currentPeriodId && this.state.financialPeriods?.length) {
         this.state.currentPeriodId = this.state.financialPeriods[0].id;
       }
