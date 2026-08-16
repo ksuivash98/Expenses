@@ -905,12 +905,34 @@ class App {
   }
 
   async payUtility(id) {
-    await this.formDialog('Оплата КУслуги', [
+    const util = utilitiesService.getById(id);
+    if (!util) {
+      this.ui.toast('Услуга не найдена', 'error');
+      return;
+    }
+    if (util.status === 'paid') {
+      this.ui.toast('Уже оплачено', 'warning');
+      return;
+    }
+    const remaining = util.remaining ?? util.amount;
+    await this.formDialog(`Оплата: ${util.service}`, [
+      {
+        name: 'amount',
+        label: `Сумма (осталось ${remaining})`,
+        type: 'number',
+        step: '0.01',
+        min: 0,
+        value: remaining,
+        required: true
+      },
       { name: 'budget_category', label: 'Конверт', type: 'select', options: this.envelopeOptions(), required: true },
       { name: 'date', label: 'Дата', type: 'date', value: todayISO() }
     ], (data) => {
-      const result = utilitiesService.pay(id, data.budget_category, data.date);
-      this.ui.toast(result.message || (result.success ? 'Оплачено' : 'Ошибка'), result.success ? 'success' : 'error');
+      const result = utilitiesService.pay(id, data.budget_category, data.date, data.amount);
+      this.ui.toast(
+        result.message || (result.success ? 'Оплачено' : 'Ошибка'),
+        result.success ? 'success' : 'error'
+      );
       if (result.success) this.refresh();
       return result;
     });

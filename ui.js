@@ -1027,20 +1027,33 @@ export class UI {
       ` : ''}
       ${this.list(list.map((item) => {
         const overdue = item.status !== 'paid' && item.due_date && String(item.due_date) < new Date().toISOString().slice(0, 10);
+        const paidAmount = Number(item.paid_amount) || 0;
+        const remaining = Number(item.remaining ?? item.amount) || 0;
+        let statusLabel = 'ожидает';
+        if (item.status === 'paid') statusLabel = 'оплачено';
+        else if (item.isPartial || paidAmount > 0) statusLabel = `частично · осталось ${formatMoney(remaining, currency)}`;
+        else if (overdue) statusLabel = 'просрочено';
         return `
         <article class="list-item glass-soft ${overdue ? 'utility-overdue' : ''}">
           <div class="list-main">
             <strong>${escapeHtml(item.service)}</strong>
-            <span class="muted">до ${formatDate(item.due_date)} · ${item.status === 'paid' ? 'оплачено' : (overdue ? 'просрочено' : 'ожидает')}${item.comment ? ` · ${escapeHtml(item.comment)}` : ''}</span>
+            <span class="muted">до ${formatDate(item.due_date)} · ${statusLabel}${item.comment ? ` · ${escapeHtml(item.comment)}` : ''}</span>
+            ${paidAmount > 0 && item.status !== 'paid' ? `
+              <div class="progress-row" style="margin-top:8px;max-width:220px">
+                <div class="progress-meta"><span>Оплачено</span><span>${formatMoney(paidAmount, currency)} / ${formatMoney(item.amount, currency)}</span></div>
+                <div class="progress-bar"><i style="width:${Math.min(100, Math.round((paidAmount / Math.max(item.amount, 0.01)) * 100))}%"></i></div>
+              </div>
+            ` : ''}
           </div>
           <div class="list-side">
             <strong>${formatMoney(item.amount, currency)}</strong>
+            ${item.status !== 'paid' ? `<span class="muted">к оплате ${formatMoney(remaining, currency)}</span>` : ''}
             <div class="btn-row wrap">
               ${item.status !== 'paid' ? `
-                <button class="btn btn-primary btn-sm" data-action="pay-utility" data-id="${item.id}" type="button">Оплатить</button>
+                <button class="btn btn-primary btn-sm" data-action="pay-utility" data-id="${item.id}" type="button">${paidAmount > 0 ? 'Доплатить' : 'Оплатить'}</button>
                 <button class="btn btn-ghost btn-sm" data-action="edit-utility" data-id="${item.id}" type="button">✏ Изменить</button>
-                <button class="btn btn-danger btn-sm" data-action="delete-utility" data-id="${item.id}" type="button">Удалить</button>
-              ` : ''}
+                ${paidAmount <= 0 ? `<button class="btn btn-danger btn-sm" data-action="delete-utility" data-id="${item.id}" type="button">Удалить</button>` : ''}
+              ` : '<span class="muted">✓ Оплачено</span>'}
             </div>
           </div>
         </article>
