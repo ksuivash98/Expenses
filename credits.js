@@ -112,6 +112,70 @@ function daysUntil(dateISO) {
   return Number.isFinite(diff) ? Math.max(0, diff) : null;
 }
 
+/**
+ * Срок кредита в месяцах по датам договора.
+ */
+function contractMonths(startDate, endDate) {
+  if (!startDate || !endDate) return null;
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return null;
+  let months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+  if (end.getDate() >= start.getDate()) months += 1;
+  return Math.max(1, months);
+}
+
+/**
+ * Переплата = лишнее сверх тела кредита (проценты и комиссии).
+ * Активный: по графику договора — платёж × срок − сумма кредита.
+ * Закрытый: фактически выплачено − начальная сумма.
+ */
+function calculateOverpayment(credit, {
+  initialAmount,
+  currentBalance,
+  monthlyPayment,
+  paidFromPayments,
+  monthsLeft,
+  status
+}) {
+  const initial = Math.max(0, safeNum(initialAmount));
+  const paidTotal = Math.max(0, safeNum(paidFromPayments));
+  const monthly = Math.max(0, safeNum(monthlyPayment));
+  const balance = Math.max(0, safeNum(currentBalance));
+  const isClosed = status !== 'active' || balance <= 0;
+
+  if (isClosed) {
+    return roundMoney(Math.max(0, paidTotal - initial));
+  }
+
+  // Плановая переплата по договору (start → end)
+  const termMonths = contractMonths(credit.start_date, credit.end_date);
+  if (termMonths != null && monthly > 0) {
+    return roundMoney(Math.max(0, termMonths * monthly - initial));
+  }
+
+  // Без даты окончания — прогноз по оставшимся платежам
+  let paymentsLeft = monthsLeft;
+  if (monthly > 0 && balance > 0) {
+    const byBalance = Math.ceil(balance / monthly);
+    paymentsLeft = paymentsLeft == null ? byBalance : Math.min(paymentsLeft, byBalance);
+  }
+  paymentsLeft = Math.max(0, safeNum(paymentsLeft));
+
+  const paidPrincipal = roundMoney(Math.max(0, initial - balance));
+  const effectivePaid = Math.max(paidTotal, paidPrincipal);
+  const projectedTotal = roundMoney(effectivePaid + paymentsLeft * monthly);
+  let overpayment = roundMoney(Math.max(0, projectedTotal - initial));
+
+  // Если платёж явно больше «голого» тела — оценка по минимальному сроку
+  if (overpayment <= 0 && monthly > 0 && initial > 0) {
+    const minTerm = Math.ceil(initial / monthly);
+    overpayment = roundMoney(Math.max(0, minTerm * monthly - initial));
+  }
+
+  return overpayment;
+}
+
 export class CreditsService {
   getAll() {
     return sortByDate(storage.list('credits'), (c) => c.start_date || c.created_at, true);
@@ -230,7 +294,6 @@ export class CreditsService {
     const progress = safePct(paid, initialAmount);
     const payments = this.getPayments(credit.id);
     const paidFromPayments = roundMoney(sumBy(payments, (p) => safeNum(p.amount)));
-    const overpayment = roundMoney(Math.max(0, paidFromPayments - paid));
 
     const status = credit.status === 'active' ? 'active' : 'closed';
     const nextPayment = status === 'active' ? nextPaymentDate(paymentDay) : null;
@@ -265,6 +328,15 @@ export class CreditsService {
 
     if (monthsLeft != null && !Number.isFinite(monthsLeft)) monthsLeft = null;
     if (daysLeft != null && !Number.isFinite(daysLeft)) daysLeft = null;
+
+    const overpayment = calculateOverpayment(credit, {
+      initialAmount,
+      currentBalance,
+      monthlyPayment,
+      paidFromPayments,
+      monthsLeft,
+      status
+    });
 
     const overdue = status === 'active' && this._isOverdue(credit.id, paymentDay);
     let urgency = 'gray';
