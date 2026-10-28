@@ -5,6 +5,7 @@ import {
   escapeHtml, formatDate, formatDateTime, formatMoney, getMonthName, PERIOD_STATUS_LABELS
 } from './utils.js';
 import { drawBars, drawDonut, drawLine, legendHtml } from './charts.js';
+import { storage } from './storage.js';
 // silk / warpText подключаются лениво — сбой WebGL не должен ронять весь UI
 
 function formatDayMonth(iso) {
@@ -64,7 +65,7 @@ export class UI {
       <div class="app-shell">
         <aside class="sidebar glass" id="sidebar">
           <div class="brand">
-            <div class="brand-mark" aria-hidden="true">К</div>
+            <div class="brand-mark" aria-hidden="true">▱</div>
             <div>
               <strong>Кабинет</strong>
               <span>личные финансы</span>
@@ -113,7 +114,7 @@ export class UI {
     `).join('');
 
     this.bindGlobalEvents();
-    requestAnimationFrame(() => this.mountSilkBackground());
+    // The dashboard uses a quiet, static background.
   }
 
   mountSilkBackground() {
@@ -141,7 +142,7 @@ export class UI {
       this._silk.setTheme(value);
       return;
     }
-    this.mountSilkBackground();
+    // Static background follows the CSS theme variables.
   }
 
   bindGlobalEvents() {
@@ -466,31 +467,13 @@ export class UI {
     };
 
     this.render(`
-      <section class="hero-panel glass">
-        <div class="hero-main">
-          <div class="hero-copy">
-            <p class="brand-wordmark">Кабинет</p>
-            <div class="eyebrow">Текущий период</div>
-            <h2>${escapeHtml(period ? `${PERIOD_STATUS_LABELS[period.status] || ''} · ${period.year}-${String(period.month).padStart(2, '0')}` : '—')}</h2>
-            <p class="muted">Домашний учёт доходов, конвертов и платежей за месяц</p>
-          </div>
-          <div class="hero-actions">
-            <button class="btn btn-primary" data-action="add-income" type="button">+ Доход</button>
-            <button class="btn btn-ghost" data-action="distribute" type="button">Распределить</button>
-            <button class="btn btn-ghost" data-action="add-expense" type="button">Покупка</button>
-          </div>
+      <div class="dashboard-intro">
+        <div><span class="eyebrow">ОБЗОР ФИНАНСОВ</span><p class="muted">Все ваши деньги — под контролем</p></div>
+        <div class="hero-actions">
+          <button class="btn btn-ghost" data-action="add-expense" type="button">↗ Расход</button>
+          <button class="btn btn-primary" data-action="add-income" type="button">+ Добавить доход</button>
         </div>
-        <div class="hero-visual" aria-hidden="true">
-          <img
-            class="hero-home-img"
-            src="assets/images/home-hero.jpg"
-            alt=""
-            width="320"
-            height="320"
-            decoding="async"
-          />
-        </div>
-      </section>
+      </div>
       ${this.stats([
         {
           icon: '💰',
@@ -539,6 +522,17 @@ export class UI {
           clickAction: 'goto-required'
         }
       ])}
+      <div class="dashboard-overview">
+        <section class="panel glass activity-panel">
+          <div class="panel-head"><div><span class="eyebrow">ДЕНЕЖНЫЙ ПОТОК</span><h3>Расходы по дням</h3></div><span class="chart-period">Текущий месяц</span></div>
+          ${this.dashboardBars(period, currency)}
+          <div class="category-summary">${expenses.structure.slice(0, 3).map((item, i) => `<div style="--category-color:${['#21c8bd','#598be9','#a078de'][i]}"><span class="category-dot"></span><span>${escapeHtml(item.category)}</span><strong>${formatMoney(item.amount, currency)}</strong></div>`).join('') || '<p class="muted">Категории появятся после первой покупки</p>'}</div>
+        </section>
+        <section class="panel glass transactions-panel">
+          <div class="panel-head"><div><span class="eyebrow">АКТИВНОСТЬ</span><h3>Последние операции</h3></div><button class="btn btn-ghost btn-sm" data-page="history" type="button">Все операции ↗</button></div>
+          ${this.dashboardTransactions(currency)}
+        </section>
+      </div>
       <div class="two-col">
         <section class="panel glass">
           <div class="panel-head"><h3>Конверты</h3></div>
@@ -599,6 +593,29 @@ export class UI {
         ` : this.empty('Нет ближайших платежей')}
       </section>
     `);
+  }
+
+  dashboardBars(period, currency) {
+    const days = period ? new Date(period.year, period.month, 0).getDate() : 31;
+    const totals = Array(days).fill(0);
+    storage.list('expenses').forEach((item) => {
+      const day = Number(String(item.date).slice(8, 10));
+      if (day >= 1 && day <= days) totals[day - 1] += Number(item.amount) || 0;
+    });
+    const max = Math.max(...totals, 1);
+    return `<div class="daily-chart" role="img" aria-label="Расходы по дням текущего месяца">
+      <div class="chart-scale"><span>${formatMoney(max === 1 ? 0 : max, currency)}</span><span>${formatMoney(max === 1 ? 0 : max / 2, currency)}</span><span>0</span></div>
+      <div class="daily-bars">${totals.map((amount, i) => `<div class="day-column"><div class="day-track"><i style="height:${amount / max * 100}%" title="${i + 1}: ${escapeHtml(formatMoney(amount, currency))}"></i></div><span>${i === 0 || (i + 1) % 5 === 0 || i === days - 1 ? i + 1 : ''}</span></div>`).join('')}</div>
+      ${totals.every(v => v === 0) ? '<div class="chart-empty">Пока нет расходов<span>Добавьте покупку, чтобы увидеть динамику</span></div>' : ''}
+    </div>`;
+  }
+
+  dashboardTransactions(currency) {
+    const rows = [
+      ...storage.list('income').map(item => ({ ...item, incoming: true, subtitle: item.source })),
+      ...storage.list('expenses').map(item => ({ ...item, incoming: false, subtitle: item.category }))
+    ].sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.created_at || '').localeCompare(String(a.created_at || ''))).slice(0, 6);
+    return rows.length ? `<div class="recent-transactions">${rows.map(item => `<div class="transaction-row"><span class="transaction-icon ${item.incoming ? 'incoming' : ''}">${item.incoming ? '↓' : '↗'}</span><div class="transaction-copy"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.subtitle || '')}</span></div><div class="transaction-amount ${item.incoming ? 'incoming' : ''}"><strong>${item.incoming ? '+' : '−'}${formatMoney(item.amount, currency)}</strong><span>${formatDate(item.date)}</span></div></div>`).join('')}</div>` : `<div class="transactions-empty"><span>⇄</span><h4>Здесь начинается ваша история</h4><p>Добавьте первый доход или расход.<br>Все операции будут собраны здесь.</p><button class="btn btn-ghost btn-sm" data-action="add-income" type="button">+ Первый доход</button></div>`;
   }
 
   renderIncome(list, summary, currency) {
