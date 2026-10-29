@@ -1,7 +1,8 @@
 /**
- * app.js — точка входа приложения (LocalStorage, без авторизации)
+ * app.js — точка входа приложения (локальный режим и облачный аккаунт)
  */
 import { storage } from './storage.js';
+import { cloud } from './cloud.js';
 import { incomeService } from './income.js';
 import { budgetService } from './budget.js';
 import { expensesService } from './expenses.js';
@@ -1264,12 +1265,15 @@ class App {
 
 const app = new App();
 
-function boot() {
+async function boot() {
   if (!document.getElementById('app')) {
     console.error('Элемент #app не найден');
     return;
   }
+  await cloud.start();
   app.init();
+  cloud.attach();
+  window.addEventListener('finance-cloud-updated', () => { app.refreshChrome(); app.navigate(app.page); });
 }
 
 if (document.readyState === 'loading') {

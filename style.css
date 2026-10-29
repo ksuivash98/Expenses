@@ -2588,3 +2588,14 @@ body::before,body::after,.app-bg {display:none!important;}
 @media(max-width:1100px) {.app-shell{grid-template-columns:220px 1fr;}.sidebar{padding:20px 10px;}.main{padding:0 15px 15px;}.topbar-left>div{gap:8px;}.dashboard-overview{grid-template-columns:1fr;}.topbar-actions #btn-close-month{display:none;}}
 @media(max-width:760px) {.app-shell{display:block;padding:8px;}.sidebar{position:fixed;top:8px;left:8px;width:240px;height:calc(100dvh - 16px);transform:translateX(-110%);}.sidebar.open{transform:translateX(0);}.main{padding:0 13px 15px;}.topbar{padding:17px 0;gap:8px;}#menu-toggle{display:inline-grid;}.topbar-left h1{font-size:24px;}.topbar-left>div{display:block;}.period-switcher{margin-top:5px;}#btn-open-period{display:none;}.dashboard-intro{align-items:flex-start;flex-direction:column;}.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}.stat-card{padding:13px 10px;gap:8px;}.stat-icon{width:28px;height:28px;font-size:16px;}.stat-value{font-size:24px!important;}.panel{padding:15px;}.two-col{grid-template-columns:1fr;}.daily-bars{gap:3px;}.category-summary{flex-wrap:wrap;}.topbar-actions{align-self:flex-start;}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;}}
+
+.account-dialog {width:min(480px,calc(100vw - 28px));max-height:90dvh;overflow:auto;background:var(--surface-strong);color:var(--text-primary);border:1px solid var(--border-strong);border-radius:16px;padding:24px;box-shadow:var(--shadow);}
+.account-dialog::backdrop {background:#000a;backdrop-filter:blur(4px);}
+.account-dialog h2 {margin-top:0;}
+.account-dialog form,.account-dialog label {display:grid;gap:10px;}
+.account-dialog form {gap:16px;margin:20px 0;}
+.account-dialog>.btn {margin:5px 5px 5px 0;}
+.account-dialog input {width:100%;font-size:16px;}
+.topbar-actions {flex-wrap:wrap;justify-content:flex-end;}
+[hidden] {display:none!important;}
+@media(max-width:760px) {.topbar {flex-wrap:wrap;}.topbar-actions {width:100%;justify-content:flex-start;}}

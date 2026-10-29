@@ -6,7 +6,7 @@ import {
   deepClone, generateId, getMonthName, todayISO
 } from './utils.js';
 
-const STORAGE_KEY = 'financeApp_v1';
+let STORAGE_KEY = 'financeApp_v1';
 
 /**
  * Категории бюджета по умолчанию.
@@ -133,6 +133,12 @@ export class Storage {
   constructor() {
     this.state = createDefaultState();
     this.listeners = new Set();
+    this.load();
+  }
+
+  useAccount(userId) {
+    STORAGE_KEY = userId ? `financeApp_v1:user:${userId}` : 'financeApp_v1';
+    this.state = createDefaultState();
     this.load();
   }
 
